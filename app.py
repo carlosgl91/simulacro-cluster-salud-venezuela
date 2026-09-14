@@ -35,20 +35,20 @@ st.markdown(
     f"""
     <style>
       .stApp {{ background:{LIGHT}; color:{INK}; }}
-      .block-container {{ max-width:1380px; padding-top:3.4rem; padding-bottom:3rem; }}
+      .block-container {{ max-width:1380px; padding-top:2.1rem; padding-bottom:3rem; }}
       [data-testid="stSidebar"] {{ background:#EFEADF; border-right:1px solid #CFC7B7; }}
       [data-testid="stSidebar"] h3 {{ font-family:Georgia,serif; color:{INK}; }}
       .editorial-topline {{ border-top:5px solid {RED}; padding-top:.7rem;
         font:700 .7rem Arial,sans-serif; letter-spacing:.17em; text-transform:uppercase; color:{RED}; }}
-      .editorial-title {{ font:700 clamp(2.25rem,4vw,4rem)/1.06 Georgia,serif;
-        letter-spacing:-.035em; color:{INK}; max-width:850px; margin:.58rem 0 .7rem; }}
-      .editorial-deck {{ font:1.08rem/1.45 Georgia,serif; max-width:840px; color:#4A4843;
-        margin:0 0 .7rem; }}
+      .editorial-title {{ font:700 clamp(2.1rem,3.5vw,3.45rem)/1.08 Georgia,serif;
+        letter-spacing:-.035em; color:{INK}; max-width:980px; margin:.48rem 0 .45rem; }}
+      .editorial-deck {{ font:1rem/1.4 Georgia,serif; max-width:900px; color:#4A4843;
+        margin:0 0 .55rem; }}
       .editorial-meta {{ border-top:1px solid #BFB7A9; border-bottom:1px solid #BFB7A9;
         padding:.45rem 0; font:.72rem Arial,sans-serif; letter-spacing:.07em;
         text-transform:uppercase; color:#665F54; margin-bottom:.5rem; }}
-      .editorial-note {{ border-left:3px solid {RED}; padding:.55rem .8rem;
-        background:#F0E9DD; font:.86rem/1.42 Arial,sans-serif; color:#554D42; margin:.65rem 0 1rem; }}
+      .editorial-note {{ border-left:3px solid {RED}; padding:.45rem .7rem;
+        background:#F0E9DD; font:.8rem/1.35 Arial,sans-serif; color:#554D42; margin:.45rem 0 .7rem; }}
       .block-container h2, .block-container h3, .block-container h4 {{
         font-family:Georgia,serif; color:{INK}; letter-spacing:-.02em; }}
       .block-container h2 {{ border-top:1px solid {INK}; padding-top:.42rem; }}
@@ -144,27 +144,21 @@ res = results[results.id_reporte.isin(ids)].copy()
 
 st.markdown(
     '<div class="editorial-topline">Clúster Salud Venezuela &nbsp;/&nbsp; Panorama de la respuesta</div>'
-    '<h1 class="editorial-title">Dónde está la respuesta sanitaria y qué está logrando</h1>'
-    '<p class="editorial-deck">Una lectura ejecutiva de organizaciones, lugares de intervención y resultados, '
-    'organizada en torno a los nuevos formularios F01 y F02.</p>'
+    '<h1 class="editorial-title">La respuesta sanitaria, de un vistazo</h1>'
+    '<p class="editorial-deck">Quién interviene, dónde trabaja y cómo evoluciona el reporte.</p>'
     '<div class="editorial-meta">Edición de trabajo &nbsp;·&nbsp; F01 presencia y oferta &nbsp;·&nbsp; F02 resultados &nbsp;·&nbsp; Datos históricos</div>',
     unsafe_allow_html=True,
 )
-st.markdown(
-    '<div class="editorial-note">Los datos provienen de los tres formularios antiguos. '
-    'Sirven para probar la visualización: no equivalen a envíos de los nuevos F01/F02 '
-    'y no permiten vincular cada reporte con una intervención nueva específica.</div>',
-    unsafe_allow_html=True,
-)
+st.caption("Simulacro con datos históricos de los tres formularios anteriores; no representa envíos de los nuevos F01/F02.")
 
 tabs = st.tabs(["Panorama", "Presencia y oferta · F01", "Resultados · F02", "Calidad y alcance"])
 
 with tabs[0]:
-    section("Panorama", "Tres preguntas: quién interviene, dónde y qué se reporta.")
+    st.subheader("Panorama")
     m1, m2, m3, m4 = st.columns(4)
     m1.metric("Organizaciones", len(set(f.organizacion) | set(p.organizacion) | set(r.organizacion)))
-    m2.metric("Registros F01", len(f))
-    m3.metric("Puntos de atención", len(p))
+    m2.metric("Apoyos registrados", len(f))
+    m3.metric("Lugares de servicio", len(p))
     m4.metric("Reportes periódicos", r.id_reporte.nunique())
 
     a_points = f[["organizacion", "estado", "municipio", "nombre_establecimiento", "latitud", "longitud"]].rename(columns={"nombre_establecimiento": "lugar"}).copy()
@@ -185,7 +179,7 @@ with tabs[0]:
                 hover_data={"organizacion": True, "estado": True, "municipio": True, "latitud": False, "longitud": False},
                 color_discrete_map={"Establecimiento de salud": RED, "Sitio de reporte de acciones": YELLOW},
                 zoom=5.5, center={"lat": 8.6, "lon": -66}, map_style="carto-positron",
-                title="Lugares con coordenadas históricas",
+                title="Dónde se registra actividad",
             )
             outlines = [
                 go.Scattermap(
@@ -204,9 +198,12 @@ with tabs[0]:
         if by_state.empty:
             st.info("Sin registros para los filtros seleccionados.")
         else:
-            fig = px.bar(by_state, x="organizaciones", y="estado", orientation="h", color_discrete_sequence=[BLUE], title="Organizaciones por estado")
+            fig = px.bar(by_state, x="organizaciones", y="estado", orientation="h", text="organizaciones", color_discrete_sequence=[BLUE], title="Presencia por estado")
+            fig.update_traces(textposition="outside", cliponaxis=False)
+            fig.update_layout(xaxis_title=None, yaxis_title=None, showlegend=False)
+            fig.update_xaxes(range=[0, by_state.organizaciones.max() * 1.18])
             chart(fig, 445)
-    st.caption("Mapa: coordenadas del antiguo F01 y de reportes del antiguo F03. El mapeo de servicios antiguo no contiene coordenadas; no se le asignaron ubicaciones supuestas.")
+    st.caption("Mapa: rojo = establecimientos (F01 anterior); amarillo = sitios de reportes (F03 anterior). No se infieren coordenadas faltantes.")
 
     st.markdown("#### Organizaciones con más registros")
     leader_left, leader_right = st.columns(2)
@@ -251,7 +248,16 @@ with tabs[0]:
             fig.update_xaxes(range=[0, by_report_org.reportes.max() * 1.16])
             fig.update_yaxes(automargin=True)
             chart(fig, 340)
-    st.caption("Clasificación indicativa con datos antiguos: se cuentan registros de establecimientos y reportes, no acciones individuales ni personas atendidas. Los nombres históricos aún no están armonizados.")
+    monthly = r.dropna(subset=["fecha_reporte"]).copy()
+    if not monthly.empty:
+        monthly["mes"] = monthly.fecha_reporte.dt.to_period("M").dt.to_timestamp()
+        series = monthly.groupby("mes").id_reporte.nunique().reset_index(name="reportes")
+        fig = px.bar(series, x="mes", y="reportes", text="reportes", color_discrete_sequence=[INK], title="Evolución de los reportes periódicos")
+        fig.update_traces(textposition="outside", cliponaxis=False)
+        fig.update_layout(xaxis_title=None, yaxis_title=None)
+        fig.update_xaxes(dtick="M1", tickformat="%b %Y")
+        chart(fig, 290)
+    st.caption("Los rankings cuentan registros, no intervenciones únicas ni personas atendidas. Los nombres históricos aún requieren armonización.")
 
 with tabs[1]:
     section("Presencia y oferta · F01", "El nuevo F01 distinguirá dos focos. Aquí se muestran sus antecedentes históricos por separado.")
@@ -270,7 +276,8 @@ with tabs[1]:
             "organizacion": "Organización", "nombre_establecimiento": "Establecimiento", "tipo_establecimiento": "Tipo",
             "estado": "Estado", "municipio": "Municipio", "fecha_reporte": "Fecha de registro",
         })
-        st.dataframe(view, hide_index=True, width="stretch")
+        with st.expander("Ver registros históricos de establecimientos"):
+            st.dataframe(view, hide_index=True, width="stretch")
     else:
         c1, c2, c3 = st.columns(3)
         c1.metric("Puntos históricos", len(p))
@@ -285,7 +292,8 @@ with tabs[1]:
             "organizacion": "Organización", "nombre_sitio": "Lugar o sitio", "tipo_lugar": "Tipo de lugar",
             "estado": "Estado", "municipio": "Municipio", "desde": "Desde", "hasta": "Hasta",
         })
-        st.dataframe(view, hide_index=True, width="stretch")
+        with st.expander("Ver registros históricos de lugares"):
+            st.dataframe(view, hide_index=True, width="stretch")
     st.caption("La nomenclatura antigua se conserva en estas vistas; la producción deberá aplicar los catálogos y equivalencias del nuevo F01.")
 
 with tabs[2]:
@@ -331,7 +339,8 @@ with tabs[2]:
                 st.info("Este indicador no tiene desagregación demográfica en el registro histórico.")
         by_org = metric.groupby("organizacion", as_index=False).total.sum().sort_values("total", ascending=False)
         by_org.columns = ["Organización", f"Valor reportado ({unit})"]
-        st.dataframe(by_org, hide_index=True, width="stretch")
+        with st.expander("Ver desglose por organización"):
+            st.dataframe(by_org, hide_index=True, width="stretch")
         st.caption("La suma corresponde a valores informados en distintos reportes; no representa personas únicas entre períodos.")
 
 with tabs[3]:
