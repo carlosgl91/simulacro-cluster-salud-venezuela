@@ -286,7 +286,10 @@ with tabs[1]:
         offered = tables["offered"][tables["offered"].id_servicio.isin(p.id_servicio)]
         counts = offered.groupby("servicio").id_servicio.nunique().sort_values().tail(14).reset_index(name="puntos")
         if not counts.empty:
-            fig = px.bar(counts, x="puntos", y="servicio", orientation="h", color_discrete_sequence=[TEAL], title="Servicios o acciones ofertadas · clasificación original")
+            fig = px.bar(counts, x="puntos", y="servicio", orientation="h", text="puntos", color_discrete_sequence=[YELLOW], title="Servicios o acciones ofertadas · clasificación original")
+            fig.update_traces(textposition="outside", cliponaxis=False, marker_line_color="#151515", marker_line_width=1)
+            fig.update_layout(xaxis_title="Puntos registrados", yaxis_title=None)
+            fig.update_xaxes(range=[0, counts.puntos.max() * 1.14])
             chart(fig, 440)
         view = p[["organizacion", "nombre_sitio", "tipo_lugar", "estado", "municipio", "desde", "hasta"]].rename(columns={
             "organizacion": "Organización", "nombre_sitio": "Lugar o sitio", "tipo_lugar": "Tipo de lugar",
@@ -331,9 +334,15 @@ with tabs[2]:
             if metric.tiene_desagregacion.fillna(0).astype(int).eq(1).any():
                 demo = pd.DataFrame({"Grupo": ["Mujeres", "Hombres", "Niñas", "Niños"],
                                      "Valor": [metric.mujeres.sum(), metric.hombres.sum(), metric.ninas.sum(), metric.ninos.sum()]})
-                fig = px.bar(demo, x="Grupo", y="Valor", color="Grupo", color_discrete_sequence=[RED, BLUE, YELLOW, TEAL], title="Desagregación por sexo y edad")
-                fig.update_layout(showlegend=False)
-                chart(fig)
+                fig = px.bar(
+                    demo, x="Valor", y=["Personas reportadas"] * len(demo), color="Grupo",
+                    orientation="h", text="Valor", barmode="stack",
+                    color_discrete_map={"Mujeres": RED, "Hombres": BLUE, "Niñas": YELLOW, "Niños": TEAL},
+                    title="Distribución por sexo y edad",
+                )
+                fig.update_traces(texttemplate="%{text:,.0f}", textposition="inside")
+                fig.update_layout(xaxis_title=unit, yaxis_title=None, legend=dict(orientation="h", y=-0.3, x=0))
+                chart(fig, 310)
                 st.caption(f"Discapacidad: {format_number(metric.discapacidad.sum())}. Es un subconjunto transversal; no se agrega al total.")
             else:
                 st.info("Este indicador no tiene desagregación demográfica en el registro histórico.")
