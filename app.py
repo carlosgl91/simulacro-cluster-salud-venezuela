@@ -286,6 +286,7 @@ with tabs[1]:
         offered = tables["offered"][tables["offered"].id_servicio.isin(p.id_servicio)]
         counts = offered.groupby("servicio").id_servicio.nunique().sort_values().tail(14).reset_index(name="puntos")
         if not counts.empty:
+            counts["servicio"] = counts.servicio.str.replace(r"^\d+(?:\.\d+)*\s*", "", regex=True)
             fig = px.bar(counts, x="puntos", y="servicio", orientation="h", text="puntos", color_discrete_sequence=[YELLOW], title="Servicios o acciones ofertadas · clasificación original")
             fig.update_traces(textposition="outside", cliponaxis=False, marker_line_color="#151515", marker_line_width=1)
             fig.update_layout(xaxis_title="Puntos registrados", yaxis_title=None)
@@ -351,6 +352,34 @@ with tabs[2]:
         with st.expander("Ver desglose por organización"):
             st.dataframe(by_org, hide_index=True, width="stretch")
         st.caption("La suma corresponde a valores informados en distintos reportes; no representa personas únicas entre períodos.")
+
+    people = res[(res.unidad == "Personas") & res.tiene_desagregacion.fillna(0).astype(int).eq(1)].copy()
+    if not people.empty:
+        st.subheader("Distribución por acción")
+        st.caption("Cada barra es un indicador de personas del reporte histórico. No equivale a los puntos que ofrecen servicios en F01.")
+        people["área"] = people.indicador_codigo.astype(str).str.extract(r"^(\d+\.\d+)\.", expand=False)
+        area_options = sorted(people["área"].dropna().unique(), key=lambda x: tuple(map(int, x.split("."))))
+        selected_area = st.selectbox("Área de acciones reportadas", area_options, format_func=lambda x: f"Área {x} del reporte histórico")
+        people = people[people["área"] == selected_area]
+        for column in ("mujeres", "hombres", "ninas", "ninos"):
+            people[column] = pd.to_numeric(people[column], errors="coerce").fillna(0)
+        breakdown = people.groupby(["indicador_interno", "indicador"], as_index=False)[["mujeres", "hombres", "ninas", "ninos"]].sum()
+        breakdown["total"] = breakdown[["mujeres", "hombres", "ninas", "ninos"]].sum(axis=1)
+        breakdown = breakdown.nlargest(10, "total").sort_values("total")
+        breakdown["Acción"] = breakdown.indicador.str.replace(r"^Número de personas (?:alcanzadas |que recibieron |con )?", "", regex=True, case=False)
+        breakdown["Acción"] = breakdown["Acción"].where(~breakdown["Acción"].duplicated(), breakdown["Acción"] + " · " + breakdown.indicador_interno)
+        long = breakdown.melt(id_vars="Acción", value_vars=["mujeres", "hombres", "ninas", "ninos"], var_name="grupo", value_name="personas")
+        long["grupo"] = long.grupo.map({"mujeres": "Mujeres", "hombres": "Hombres", "ninas": "Niñas", "ninos": "Niños"})
+        fig = px.bar(
+            long, x="personas", y="Acción", color="grupo", orientation="h", barmode="stack",
+            category_orders={"Acción": breakdown["Acción"].tolist(), "grupo": ["Mujeres", "Hombres", "Niñas", "Niños"]},
+            color_discrete_map={"Mujeres": RED, "Hombres": BLUE, "Niñas": YELLOW, "Niños": TEAL},
+            title="Personas reportadas por acción y grupo",
+        )
+        fig.update_layout(xaxis_title="Valores reportados", yaxis_title=None, legend=dict(orientation="h", y=-0.19, x=0))
+        fig.update_yaxes(automargin=True)
+        chart(fig, max(330, 54 * len(breakdown) + 100))
+        st.caption("Los valores pueden incluir a la misma persona en distintos indicadores o períodos; no son personas únicas. Discapacidad es una categoría transversal y no se suma a la barra.")
 
 with tabs[3]:
     section("Calidad y alcance", "Qué podemos mostrar hoy y qué necesita la conexión definitiva F01–F02.")
