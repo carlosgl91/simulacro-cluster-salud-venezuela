@@ -282,7 +282,43 @@ with tabs[1]:
         c1, c2, c3 = st.columns(3)
         c1.metric("Puntos históricos", len(p))
         c2.metric("Organizaciones", p.organizacion.nunique())
-        c3.metric("Municipios", p.municipio.nunique())
+        staff_columns = [column for column in p.columns if column.startswith("personal_")]
+        staff_counts = p[staff_columns].apply(pd.to_numeric, errors="coerce").fillna(0) if staff_columns else pd.DataFrame(index=p.index)
+        c3.metric("Puestos de personal declarados", format_number(staff_counts.to_numpy().sum()))
+        if staff_columns:
+            role_names = {
+                "personal_medico": "Médicos generales",
+                "personal_especialista": "Médicos especialistas",
+                "personal_enfermero": "Enfermería",
+                "personal_auxiliar_enfermeria": "Auxiliares de enfermería",
+                "personal_psicologo": "Psicología",
+                "personal_pediatria": "Pediatría",
+                "personal_ginecologia": "Ginecología",
+                "personal_nutricionista_dietista": "Nutrición y dietética",
+                "personal_odontologos": "Odontología",
+                "personal_administrativos": "Administración",
+                "personal_logista": "Logística",
+                "personal_otros": "Otros perfiles",
+            }
+            staffing = staff_counts.sum().reset_index()
+            staffing.columns = ["campo", "puestos"]
+            staffing["Profesión"] = staffing.campo.map(role_names).fillna(
+                staffing.campo.str.replace("personal_", "", regex=False).str.replace("_", " ", regex=False).str.capitalize()
+            )
+            staffing = staffing[staffing.puestos.gt(0)].sort_values("puestos", ascending=False)
+            if not staffing.empty:
+                shown = staffing.head(12).sort_values("puestos")
+                fig = px.bar(
+                    shown, x="puestos", y="Profesión", orientation="h", text="puestos",
+                    color_discrete_sequence=[YELLOW], title="Personal asignado por profesión",
+                )
+                fig.update_traces(textposition="outside", cliponaxis=False, marker_line_color="#151515", marker_line_width=1)
+                fig.update_layout(xaxis_title="Puestos declarados", yaxis_title=None)
+                fig.update_xaxes(range=[0, shown.puestos.max() * 1.15])
+                chart(fig, 430)
+                with st.expander("Ver todos los perfiles de personal"):
+                    st.dataframe(staffing[["Profesión", "puestos"]].rename(columns={"puestos": "Puestos declarados"}), hide_index=True, width="stretch")
+                st.caption("Datos del mapeo histórico de servicios (F02 anterior). Se suman puestos declarados por punto; una persona que trabaja en varios puntos puede contarse más de una vez.")
         offered = tables["offered"][tables["offered"].id_servicio.isin(p.id_servicio)]
         counts = offered.groupby("servicio").id_servicio.nunique().sort_values().tail(14).reset_index(name="puntos")
         if not counts.empty:

@@ -1,47 +1,47 @@
-﻿id_servicio,organizacion,estado,municipio,nombre_sitio,tipo_lugar,desde,hasta
-831499922,AVESSOC,Distrito Capital,Libertador,Kilómetro 4 de El Junquito,No reportado,2026-07-22,2027-06-30
-831502530,AVESSOC,La Guaira,Vargas,Carayaca,No reportado,2026-07-29,2027-06-30
-831490583,AVESSOC,La Guaira,Vargas,Comunidad Blanquita de Pérez,No reportado,2026-06-30,2027-06-30
-831493572,AVESSOC,La Guaira,Vargas,Comunidad El Caimito,No reportado,2026-07-09,2027-06-30
-831488703,AVESSOC,La Guaira,Vargas,Comunidad La Lucha,No reportado,2026-07-15,2027-06-30
-831494645,AVESSOC,La Guaira,Vargas,Los Corales,No reportado,2026-07-15,2027-06-30
-831500876,AVESSOC,La Guaira,Vargas,Los Próceres / Las Vegas,No reportado,2026-07-27,2027-06-30
-831495710,AVESSOC,La Guaira,Vargas,Tanaguarenas,No reportado,2026-07-20,2027-06-30
-831487248,AVESSOC,La Guaira,Vargas,Urbanización José Antonio Páez,No reportado,2026-07-07,2027-06-30
-831497408,AVESSOC,Miranda,Plaza,Urbanización Vicente Emilio Sojo,No reportado,2026-07-12,2027-06-30
-831284163,Acción Solidaria,La Guaira,Vargas,La Guaira,No reportado,2026-07-18,2026-12-31
-832344330,COOPI,Distrito Capital,Libertador,U.E.N Luis Hurtado Higuera,No reportado,2026-05-15,2026-09-30
-832323144,COOPI,Distrito Capital,Libertador,UE Gran Colombia,No reportado,2026-05-08,2026-09-30
-829433231,Convite AC,La Guaira,Vargas,Centro comunitario Pericoco,No reportado,2026-08-04,2026-09-30
-829435509,Convite AC,La Guaira,Vargas,la lucha,No reportado,2026-08-06,2026-09-24
-831146136,ENCILUZ,La Guaira,Vargas,Escuela U.E: Vicente Lecuna,No reportado,2026-07-15,2026-11-14
-842163868,FUNDAENSALUD,La Guaira,Vargas,La Peñita,No reportado,2026-07-20,2026-12-20
-842188504,FUNDAENSALUD (Fundación Educando en Salud),La Guaira,Vargas,La Peñita,No reportado,2026-07-20,2026-12-20
-831537131,Fondo de Naciones Unidas para la Infancia,La Guaira,Vargas,,No reportado,,
-837000625,Fundación Vive Más  (FVM),La Guaira,Vargas,La Guaira,No reportado,2026-06-25,2026-10-31
-830435519,GOAL,La Guaira,Vargas,La Guaira,No reportado,2026-07-13,2026-10-31
-831313699,International Medical Corps,La Guaira,Vargas,EMT IMC,No reportado,2026-07-11,2026-09-30
-831353665,International Medical Corps,La Guaira,Vargas,Unidad Médica Móvil,No reportado,2026-07-01,2026-09-30
-844526564,Medicos Sin Fronteras,La Guaira,Vargas,"1.Campo de beisbol Mare abajo, 2. Plaza las Palmeras, 3. Brisas de Maiquetia, 4. Los Silos, 5. Los Corales (renacer II y III), 6. CT Martin Luther King, 7. Hospital Emg Naiguata",No reportado,2026-07-01,2026-10-30
-830292431,Médicos del Mundo,La Guaira,Vargas,Comunidad Marapa-Piache,No reportado,2026-07-01,2026-12-01
-835732731,OIM - Organizacion Internacional para las Migraciones,La Guaira,Vargas,Polideportivo José María Vargas,No reportado,2026-06-29,2026-12-31
-831569696,PALUZ,La Guaira,Vargas,,No reportado,,
-849293771,PP Foundation,Distrito Capital,Libertador,,No reportado,,
-832306191,PRIMERA URGENCIA INTERNACIONAL,La Guaira,Vargas,,No reportado,,
-837802975,Peace Winds Japan,La Guaira,Vargas,,No reportado,,
-848403004,Peace Winds Japan,,,,No reportado,,
-845337961,Solidarités Internacional,La Guaira,Vargas,,No reportado,,
-832155564,UNFPA,La Guaira,Vargas,Campamento Transitorio Mare Abajo,No reportado,2026-07-13,2026-12-31
-832141148,UNFPA,La Guaira,Vargas,Campamento transitorio Estadio Cesar Nieves,No reportado,2026-07-13,2026-12-31
-833580837,UNFPA,La Guaira,Vargas,Centros transitorios La Guaira,No reportado,,
-832122239,UNFPA,La Guaira,Vargas,Polideportivo Jose María Vargas,No reportado,2026-07-13,2026-12-31
-831549015,UNICEF,La Guaira,Vargas,ASIC 10 De Marzo 510,No reportado,,
-831552249,UNICEF,La Guaira,Vargas,ASIC Camurichico 512,No reportado,,
-831551174,UNICEF,La Guaira,Vargas,ASIC Dr. Jose Maria Vargas 511,No reportado,,
-831546970,UNICEF,La Guaira,Vargas,ASIC Guaracarumbo 509,No reportado,,
-831555231,UNICEF,La Guaira,Vargas,ASIC Jose Antonio Ribas 514 (Caruao),No reportado,,
-831542034,UNICEF,La Guaira,Vargas,ASIC La Atlantida 507 (Balneario),No reportado,,
-831545013,UNICEF,La Guaira,Vargas,ASIC La Atlantida 507 (Balneario),No reportado,,
-831553788,UNICEF,La Guaira,Vargas,ASIC Naiguata 513,No reportado,,
-833557781,Ven Da Tu Mano,La Guaira,Vargas,Estadio Cesar Nieves,No reportado,2026-06-28,
-848771208,fundaensalud,La Guaira,Vargas,,No reportado,,
+﻿id_servicio,organizacion,estado,municipio,nombre_sitio,tipo_lugar,desde,hasta,personal_medico,personal_especialista,personal_enfermero,personal_auxiliar_enfermeria,personal_fisioterapeutas,personal_terapeutas_ocupacionales,personal_odontologos,personal_regente_farmacia,personal_epidemiologo,personal_psicologo,personal_nutricionista_dietista,personal_trabajador_social,personal_interprete,personal_medico_ancestral,personal_administrativos,personal_fonoaudiologia,personal_gerontologia,personal_instrumentacion_quirurgica,personal_optometristas,personal_psiquiatra,personal_quimicos_farmaceuticos,personal_terapeuta_respiratorio,personal_bacteriologia,personal_pediatria,personal_ginecologia,personal_dermatologo,personal_logista,personal_internistas,personal_podologos,personal_medicos_veterinarios,personal_opticos_optometristas,personal_ingenieros_ambientales,personal_expertos_ash,personal_abogados,personal_pedagogos,personal_otros
+831499922,AVESSOC,Distrito Capital,Libertador,Kilómetro 4 de El Junquito,No reportado,2026-07-22,2027-06-30,1,0,2,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0
+831502530,AVESSOC,La Guaira,Vargas,Carayaca,No reportado,2026-07-29,2027-06-30,1,0,2,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0
+831490583,AVESSOC,La Guaira,Vargas,Comunidad Blanquita de Pérez,No reportado,2026-06-30,2027-06-30,1,0,2,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0
+831493572,AVESSOC,La Guaira,Vargas,Comunidad El Caimito,No reportado,2026-07-09,2027-06-30,1,0,2,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0
+831488703,AVESSOC,La Guaira,Vargas,Comunidad La Lucha,No reportado,2026-07-15,2027-06-30,1,0,2,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0
+831494645,AVESSOC,La Guaira,Vargas,Los Corales,No reportado,2026-07-15,2027-06-30,1,0,2,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0
+831500876,AVESSOC,La Guaira,Vargas,Los Próceres / Las Vegas,No reportado,2026-07-27,2027-06-30,1,0,2,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0
+831495710,AVESSOC,La Guaira,Vargas,Tanaguarenas,No reportado,2026-07-20,2027-06-30,1,0,2,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0
+831487248,AVESSOC,La Guaira,Vargas,Urbanización José Antonio Páez,No reportado,2026-07-07,2027-06-30,1,0,2,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0
+831497408,AVESSOC,Miranda,Plaza,Urbanización Vicente Emilio Sojo,No reportado,2026-07-12,2027-06-30,1,0,2,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0
+831284163,Acción Solidaria,La Guaira,Vargas,La Guaira,No reportado,2026-07-18,2026-12-31,4,2,4,0,0,1,0,2,0,1,0,1,2,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,2,1,8
+832344330,COOPI,Distrito Capital,Libertador,U.E.N Luis Hurtado Higuera,No reportado,2026-05-15,2026-09-30,0,0,0,0,0,0,0,0,0,1,0,1,0,0,1,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,1,1,0,0
+832323144,COOPI,Distrito Capital,Libertador,UE Gran Colombia,No reportado,2026-05-08,2026-09-30,0,0,0,0,0,0,0,0,0,1,0,1,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0
+829433231,Convite AC,La Guaira,Vargas,Centro comunitario Pericoco,No reportado,2026-08-04,2026-09-30,3,0,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0
+829435509,Convite AC,La Guaira,Vargas,la lucha,No reportado,2026-08-06,2026-09-24,3,0,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0
+831146136,ENCILUZ,La Guaira,Vargas,Escuela U.E: Vicente Lecuna,No reportado,2026-07-15,2026-11-14,40,21,8,10,2,2,14,1,2,4,2,1,0,0,10,1,1,1,1,1,0,0,0,5,2,2,6,2,0,2,2,0,1,3,0,20
+842163868,FUNDAENSALUD,La Guaira,Vargas,La Peñita,No reportado,2026-07-20,2026-12-20,5,2,0,0,0,0,6,0,0,0,2,0,0,0,1,0,0,0,0,0,0,0,0,2,1,1,1,1,0,0,0,0,0,0,0,15
+842188504,FUNDAENSALUD (Fundación Educando en Salud),La Guaira,Vargas,La Peñita,No reportado,2026-07-20,2026-12-20,2,1,0,0,0,0,6,0,0,0,2,0,0,0,0,0,0,0,0,1,0,0,0,1,1,0,2,1,0,0,0,0,0,0,0,0
+831537131,Fondo de Naciones Unidas para la Infancia,La Guaira,Vargas,,No reportado,,,5,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+837000625,Fundación Vive Más  (FVM),La Guaira,Vargas,La Guaira,No reportado,2026-06-25,2026-10-31,66,57,0,0,0,0,0,0,0,2,2,0,0,0,0,0,0,0,0,7,0,0,0,11,5,2,0,7,0,0,0,0,0,0,0,0
+830435519,GOAL,La Guaira,Vargas,La Guaira,No reportado,2026-07-13,2026-10-31,4,4,3,0,0,0,0,0,0,2,0,0,0,0,2,0,0,0,0,0,0,0,0,1,1,0,2,2,0,0,0,0,0,0,0,5
+831313699,International Medical Corps,La Guaira,Vargas,EMT IMC,No reportado,2026-07-11,2026-09-30,4,2,9,0,3,2,0,1,0,1,0,1,1,0,6,0,0,0,0,0,0,0,0,1,1,0,7,0,0,0,0,0,2,0,0,0
+831353665,International Medical Corps,La Guaira,Vargas,Unidad Médica Móvil,No reportado,2026-07-01,2026-09-30,6,6,9,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,3,3,0,0,0,0,0,0,0,0,0,0,0
+844526564,Medicos Sin Fronteras,La Guaira,Vargas,"1.Campo de beisbol Mare abajo, 2. Plaza las Palmeras, 3. Brisas de Maiquetia, 4. Los Silos, 5. Los Corales (renacer II y III), 6. CT Martin Luther King, 7. Hospital Emg Naiguata",No reportado,2026-07-01,2026-10-30,2,1,3,0,0,0,0,1,0,4,0,0,0,0,3,0,0,0,0,0,0,0,0,0,0,0,7,0,0,0,0,0,2,0,0,15
+830292431,Médicos del Mundo,La Guaira,Vargas,Comunidad Marapa-Piache,No reportado,2026-07-01,2026-12-01,5,1,3,0,0,0,0,1,0,6,1,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,2,1,0,0,0,0,0,0,0,0
+835732731,OIM - Organizacion Internacional para las Migraciones,La Guaira,Vargas,Polideportivo José María Vargas,No reportado,2026-06-29,2026-12-31,1,3,2,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,1,0,0,0,1,1,0,0,1,0,0,0,0,0,0,0,0
+831569696,PALUZ,La Guaira,Vargas,,No reportado,,,50,4,3,0,0,0,0,0,0,2,2,0,0,0,4,0,0,0,0,0,0,0,0,1,2,0,5,1,0,0,0,0,0,0,0,5
+849293771,PP Foundation,Distrito Capital,Libertador,,No reportado,,,8,1,1,0,1,0,0,0,0,0,0,0,0,0,6,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,4
+832306191,PRIMERA URGENCIA INTERNACIONAL,La Guaira,Vargas,,No reportado,,,1,0,1,0,0,0,0,0,0,3,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+837802975,Peace Winds Japan,La Guaira,Vargas,,No reportado,,,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+848403004,Peace Winds Japan,,,,No reportado,,,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+845337961,Solidarités Internacional,La Guaira,Vargas,,No reportado,,,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,4,0,0,0
+832155564,UNFPA,La Guaira,Vargas,Campamento Transitorio Mare Abajo,No reportado,2026-07-13,2026-12-31,1,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,1
+832141148,UNFPA,La Guaira,Vargas,Campamento transitorio Estadio Cesar Nieves,No reportado,2026-07-13,2026-12-31,1,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,1
+833580837,UNFPA,La Guaira,Vargas,Centros transitorios La Guaira,No reportado,,,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+832122239,UNFPA,La Guaira,Vargas,Polideportivo Jose María Vargas,No reportado,2026-07-13,2026-12-31,1,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,1
+831549015,UNICEF,La Guaira,Vargas,ASIC 10 De Marzo 510,No reportado,,,0,5,0,0,0,0,0,0,0,0,1,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1
+831552249,UNICEF,La Guaira,Vargas,ASIC Camurichico 512,No reportado,,,0,5,0,0,0,0,0,0,0,0,1,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+831551174,UNICEF,La Guaira,Vargas,ASIC Dr. Jose Maria Vargas 511,No reportado,,,0,5,0,0,0,0,0,0,0,0,1,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1
+831546970,UNICEF,La Guaira,Vargas,ASIC Guaracarumbo 509,No reportado,,,0,5,0,0,0,0,0,0,0,0,1,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1
+831555231,UNICEF,La Guaira,Vargas,ASIC Jose Antonio Ribas 514 (Caruao),No reportado,,,0,5,0,0,0,0,0,0,0,0,1,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1
+831542034,UNICEF,La Guaira,Vargas,ASIC La Atlantida 507 (Balneario),No reportado,,,0,5,0,0,0,0,0,0,0,0,1,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1
+831545013,UNICEF,La Guaira,Vargas,ASIC La Atlantida 507 (Balneario),No reportado,,,0,5,0,0,0,0,0,0,0,0,1,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1
+831553788,UNICEF,La Guaira,Vargas,ASIC Naiguata 513,No reportado,,,0,5,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1
+833557781,Ven Da Tu Mano,La Guaira,Vargas,Estadio Cesar Nieves,No reportado,2026-06-28,,3,3,2,0,0,0,0,1,0,1,0,0,0,0,1,0,0,0,0,0,0,0,0,1,1,0,1,1,0,0,0,0,0,0,0,0
+848771208,fundaensalud,La Guaira,Vargas,,No reportado,,,6,4,0,0,0,0,4,2,0,1,2,0,0,0,1,0,0,0,0,0,0,0,0,1,1,0,0,2,0,0,0,0,0,0,0,0
