@@ -1,0 +1,58 @@
+﻿id_establecimiento,fecha_reporte,organizacion,estado,municipio,latitud,longitud,nombre_establecimiento,tipo_establecimiento
+831493130,2026-08-05,AVESSOC,La Guaira,Vargas,10.468468,-66.988901,Cpt modulo de salud playa verde,Ambulatorio urbano
+831497548,2026-08-05,AVESSOC,La Guaira,Vargas,10.468468,-66.988901,Yoel,Ambulatorio urbano
+844629070,2026-08-20,Medicos Sin Fronteras,Distrito Capital,Libertador,10.516397,-66.911405,Hospital Jose Maria Vargas,Hospital
+844596537,2026-08-19,Medicos Sin Fronteras,La Guaira,Vargas,10.618753,-66.722451,Campamento Transitorio Matin Luther King,Otro
+844532154,2026-08-19,Medicos Sin Fronteras,La Guaira,Vargas,10.619866,-66.383338,Hospital Dr. Jose Maria Espana,Hospital
+828530530,2026-08-02,Medicos sin fronteras,Distrito Capital,Libertador,43.607958,-79.727873,Hospital Vidal,Ambulatorio rural
+830438891,2026-08-04,Médicos del Mundo,La Guaira,Vargas,10.595452,-67.008984,Brisas de Maiquetia,Consultorio Médico Popular
+830429287,2026-08-04,Médicos del Mundo,La Guaira,Vargas,10.576347,-67.050571,Consultorio Popular Peache,Consultorio Médico Popular
+830431658,2026-08-04,Médicos del Mundo,La Guaira,Vargas,10.570049,-67.053991,Consultorio Popular Peache 2,Consultorio Médico Popular
+836797241,2026-08-11,OIM - Organización Internacional para las Migraciones,La Guaira,Vargas,-66.942106,10.597275,Ambulatorio La Sanidad,Ambulatorio urbano
+836687034,2026-08-11,OIM - Organización Internacional para las Migraciones,La Guaira,Vargas,-67.020472,10.596528,CPT II Mirabal I,Consultorio Médico Popular
+836768015,2026-08-11,OIM - Organización Internacional para las Migraciones,La Guaira,Vargas,-66.942106,10.597275,CPT II San Antonio de las Flores,Consultorio Médico Popular
+836705442,2026-08-11,OIM - Organización Internacional para las Migraciones,La Guaira,Vargas,10.582976,-67.018002,CPT II “Ezequiel Zamora”,Consultorio Médico Popular
+836712151,2026-08-11,OIM - Organización Internacional para las Migraciones,La Guaira,Vargas,10.585278,-67.036111,CPT II “La Roraima”,Consultorio Médico Popular
+844391255,2026-08-19,Project HOPE,Bolívar,El Callao,-12.042591,-77.098613,CPT III El Callao,Ambulatorio urbano
+844133313,2026-08-19,Project HOPE,Distrito Capital,Libertador,10.50706,-66.885704,CLINP II Br. Eutimio Rivas,Clínica
+844179941,2026-08-19,Project HOPE,Distrito Capital,Libertador,10.505322,-66.947346,CLINP II Dr. Pastor Oropeza,Clínica
+844200239,2026-08-19,Project HOPE,Distrito Capital,Libertador,10.497611,-66.908385,CPT III Luis Cardozo,Ambulatorio urbano
+844304760,2026-08-19,Project HOPE,La Guaira,Vargas,10.60189,-66.930625,CPE La Guaira - La Sanidad,Ambulatorio urbano
+844270513,2026-08-19,Project HOPE,La Guaira,Vargas,10.623089,-66.652555,CPT II Anare,Ambulatorio urbano
+844279283,2026-08-19,Project HOPE,La Guaira,Vargas,10.606338,-66.883957,CPT III Teleférico,Ambulatorio urbano
+844295134,2026-08-19,Project HOPE,La Guaira,Vargas,10.606104,-66.891384,Hospital Materno Infantil Ana Teresa de Jesús Ponce de Macuto,Hospital
+844285102,2026-08-19,Project HOPE,La Guaira,Vargas,10.621608,-66.738465,Hospital de Emergencia de Naiguatá,Hospital
+844264157,2026-08-19,Project HOPE,Miranda,Baruta,10.451052,-66.862281,CPT III Dr José María Vargas,Ambulatorio urbano
+844251562,2026-08-19,Project HOPE,Miranda,Chacao,10.495128,-66.853663,CPE Chacao,Ambulatorio urbano
+844234277,2026-08-19,Project HOPE,Miranda,El Hatillo,10.4211,-66.824973,CPT III Jesús Reggeti,Ambulatorio urbano
+840295528,2026-08-14,Proyecto Esperanza,La Guaira,Vargas,10.62305,-66.652569,CPT II Anare,Consultorio Médico Popular
+840297258,2026-08-14,Proyecto Esperanza,La Guaira,Vargas,10.60632,-66.883964,CPT III El Teleférico,Consultorio Médico Popular
+840307120,2026-08-14,Proyecto Esperanza,La Guaira,Vargas,10.60196,-66.930602,"Centro Ambulatorio Especializado La Guaira ""La Sanidad""",Ambulatorio urbano
+832421466,2026-08-06,UNFPA,La Guaira,Vargas,10.596886,-67.013834,Centro de Diagnóstico Integral (CDI) Elizabeth Perdomo,Centro de Diagnóstico Integral (CDI)
+832376615,2026-08-06,UNFPA,La Guaira,Vargas,10.603213,-66.92178,Hospital General Regional  José María Vargas IVSS,Hospital
+832412422,2026-08-06,UNFPA,La Guaira,Vargas,10.609499,-66.885259,Hospital Materno Infantil Ana Teresa de Jesús Ponce,Hospital
+832425478,2026-08-06,UNFPA,La Guaira,Vargas,10.533072,-67.120854,Hospital Tipo I Dr. Eudoro González,Hospital
+832416699,2026-08-06,UNFPA,La Guaira,Vargas,10.621684,-66.738671,Hospital de Emergencia de Naiguata,Hospital
+831534009,2026-08-05,UNICEF,La Guaira,Vargas,10.598067,-66.971605,ASIC 10 De Marzo 510,Centro de Diagnóstico Integral (CDI)
+831535731,2026-08-05,UNICEF,La Guaira,Vargas,10.609414,-66.873415,ASIC Camurichico 512,Centro de Diagnóstico Integral (CDI)
+831534824,2026-08-05,UNICEF,La Guaira,Vargas,10.598278,-66.972978,ASIC Dr. Jose Maria Vargas 511,Centro de Diagnóstico Integral (CDI)
+831531162,2026-08-05,UNICEF,La Guaira,Vargas,10.602169,-67.029948,ASIC General Jose Antonio Paez 508,Centro de Diagnóstico Integral (CDI)
+831532613,2026-08-05,UNICEF,La Guaira,Vargas,10.593807,-67.017267,ASIC Guaracarumbo 509,Centro de Diagnóstico Integral (CDI)
+831526310,2026-08-05,UNICEF,La Guaira,Vargas,10.531005,-67.120152,ASIC Jacinto Convit 506 (Carayaca),Centro de Diagnóstico Integral (CDI)
+831537642,2026-08-05,UNICEF,La Guaira,Vargas,10.60566,-66.351221,ASIC Jose Antonio Ribas 514 (Caruao),Centro de Diagnóstico Integral (CDI)
+831529108,2026-08-05,UNICEF,La Guaira,Vargas,10.599417,-67.038639,ASIC La Atlantida 507 (Balneario),Centro de Diagnóstico Integral (CDI)
+831537079,2026-08-05,UNICEF,La Guaira,Vargas,10.622138,-66.71627,ASIC Naiguata 513,Centro de Diagnóstico Integral (CDI)
+831545518,2026-08-05,UNICEF,La Guaira,Vargas,10.606203,-66.852139,Amb Dr Carlos Soublette,Ambulatorio urbano
+831550260,2026-08-05,UNICEF,La Guaira,Vargas,10.624979,-66.572621,Amb. Los Caracas,Ambulatorio urbano
+831543439,2026-08-05,UNICEF,La Guaira,Vargas,10.602044,-66.930843,Ambulatorio La Guaira Dirección Regional de Salud Estado La Guaira,Ambulatorio urbano
+831541401,2026-08-05,UNICEF,La Guaira,Vargas,10.598405,-66.971691,CDI 10 de Marzo,Centro de Diagnóstico Integral (CDI)
+831550925,2026-08-05,UNICEF,La Guaira,Vargas,10.596633,-67.013791,CDI Elizabeth Perdomo - Guaracarumbo,Centro de Diagnóstico Integral (CDI)
+831551732,2026-08-06,UNICEF,La Guaira,Vargas,10.597941,-66.985466,CDI Maiquetía,Centro de Diagnóstico Integral (CDI)
+831548067,2026-08-05,UNICEF,La Guaira,Vargas,10.597055,-66.957786,CMP San Antonio de las Flores parte alta,Consultorio Médico Popular
+831538862,2026-08-05,UNICEF,La Guaira,Vargas,10.604985,-67.030399,Consultorio Popular Jose Antonio Paez,Consultorio Médico Popular
+831552200,2026-08-06,UNICEF,La Guaira,Vargas,10.621562,-66.738317,Hosp  de Emergencia Naiguata,Hospital
+831548943,2026-08-05,UNICEF,La Guaira,Vargas,10.530693,-67.120349,Hospital Eudoro Gonzalez,Hospital
+831547529,2026-08-05,UNICEF,La Guaira,Vargas,10.60296,-66.921523,Hospital Jose Maria Vargas (IVSS),Hospital
+831546470,2026-08-05,UNICEF,La Guaira,Vargas,10.596591,-66.961048,Hospital Rafael Medina Jimenez,Hospital
+831544300,2026-08-05,UNICEF,La Guaira,Vargas,10.613843,-66.842945,Hospital de Campaña Simón Bolivar de Caraballeda,Otro
+831549591,2026-08-05,UNICEF,La Guaira,Vargas,10.60614,-66.891493,Materno Infantil Ana Teresa De Jesus Ponce,Hospital
