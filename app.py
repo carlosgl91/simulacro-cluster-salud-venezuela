@@ -541,7 +541,9 @@ date_floor, date_ceiling = (
 hero_today_label = pd.Timestamp.today().strftime("%d/%m/%Y")
 st.markdown(f'<div class="hero"><b>OPS/OMS · CLÚSTER DE SALUD · VENEZUELA</b><h1>Tablero de la Respuesta en Salud</h1><p>Presencia operativa, programación de actividades y resultados reportados</p><small>Fecha de consulta: {hero_today_label} · Periodo de reportes: {date_floor.strftime("%d/%m/%Y")} – {date_ceiling.strftime("%d/%m/%Y")}</small></div>', unsafe_allow_html=True)
 
-module = st.radio("Vista principal", ["Registro de organizaciones e intervenciones", "Reportes periódicos"], horizontal=True, label_visibility="collapsed")
+module_options=["Registro de organizaciones e intervenciones", "Reportes periódicos"]
+module_index=1 if st.query_params.get("vista")=="reportes" else 0
+module = st.radio("Vista principal", module_options, index=module_index, horizontal=True, label_visibility="collapsed")
 
 states = sorted(set(points["estado"].dropna()) | set(reports["estado"].dropna()))
 orgs = sorted(set(points["organizacion"].dropna()) | set(reports["organizacion"].dropna()))
