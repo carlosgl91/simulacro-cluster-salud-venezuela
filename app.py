@@ -998,6 +998,14 @@ if module.startswith("Registro"):
     facility_points=p[p.foco.eq("Establecimiento de salud")]
     facility_types=facility_points.groupby("tipo_punto").id_punto.nunique().reset_index(name="puntos")
     facility_orgs=facility_points.groupby("organizacion").id_punto.nunique().reset_index(name="puntos")
+    def tile_name(name: str) -> str:
+        if name.startswith("Médicos Sin Fronteras"): return "MSF"
+        if name.startswith("Médicos del Mundo"): return "MdM"
+        if name.startswith("Proyecto Esperanza"): return "Esperanza"
+        if name.startswith("OIM -"): return "OIM"
+        if name.startswith("OPS/OMS -"): return "OPS/OMS"
+        return name if len(name)<=20 else name[:19].rstrip()+"…"
+
     # Más espacio para los nombres de socios; la dona conserva su leyenda.
     facility_left,facility_right=st.columns([2,3],gap="small")
     with facility_left:
@@ -1016,16 +1024,17 @@ if module.startswith("Registro"):
         st.markdown("#### Organizaciones que apoyan establecimientos de salud")
         if facility_orgs.empty: st.info("No hay organizaciones para los filtros seleccionados.")
         else:
-            facility_orgs["nombre_corto"]=facility_orgs.organizacion.map(lambda name: "OIM" if name.startswith("OIM -") else ("OPS/OMS" if name.startswith("OPS/OMS -") else (name if len(name)<=23 else name[:22].rstrip()+"…")))
+            facility_orgs["nombre_corto"]=facility_orgs.organizacion.map(tile_name)
             fig=px.treemap(facility_orgs,path=["nombre_corto"],values="puntos",color="organizacion",custom_data=["organizacion"],
                            color_discrete_sequence=["#3568B4","#9AC7F1","#E34D40","#EAA29A","#65AAA1","#9FE4AD","#F4D37D","#6E51AA","#E68A39"],
                            labels={"organizacion":"Organización","puntos":"Establecimientos"})
             fig.update_traces(texttemplate="%{label}<br>%{value}",textfont_size=16,
                               hovertemplate="%{customdata[0]}<br>%{value} establecimientos<extra></extra>",
                               marker_line_color=PAPER,marker_line_width=3)
-            fig.update_layout(showlegend=False)
+            fig.update_layout(showlegend=False,uniformtext=dict(minsize=16,mode="hide"))
             plot(fig,590,"facility_orgs_treemap",margin=dict(l=4,r=4,t=10,b=12))
             section_figures.setdefault("Presencia de socios", []).append(fig)
+            st.caption("MSF: Médicos Sin Fronteras · MdM: Médicos del Mundo · Esperanza: Proyecto Esperanza. Pase el cursor sobre un bloque para ver el nombre completo.")
 
     st.markdown("#### Áreas o servicios del establecimiento que reciben apoyo")
     fs=filt(d["facility_services_joined"]); ft=fs.servicio.value_counts().head(10).reset_index(); ft.columns=["servicio","puntos"]; ft["foco"]="Establecimiento de salud"
@@ -1070,16 +1079,17 @@ if module.startswith("Registro"):
         st.markdown("#### Organizaciones con acciones de salud pública")
         if public_orgs.empty: st.info("No hay organizaciones para los filtros seleccionados.")
         else:
-            public_orgs["nombre_corto"]=public_orgs.organizacion.map(lambda name: "OIM" if name.startswith("OIM -") else ("OPS/OMS" if name.startswith("OPS/OMS -") else (name if len(name)<=23 else name[:22].rstrip()+"…")))
+            public_orgs["nombre_corto"]=public_orgs.organizacion.map(tile_name)
             fig=px.treemap(public_orgs,path=["nombre_corto"],values="puntos",color="organizacion",custom_data=["organizacion"],
                            color_discrete_sequence=["#3568B4","#9AC7F1","#E34D40","#EAA29A","#65AAA1","#9FE4AD","#F4D37D","#6E51AA","#E68A39"],
                            labels={"organizacion":"Organización","puntos":"Lugares"})
             fig.update_traces(texttemplate="%{label}<br>%{value}",textfont_size=16,
                               hovertemplate="%{customdata[0]}<br>%{value} lugares<extra></extra>",
                               marker_line_color=PAPER,marker_line_width=3)
-            fig.update_layout(showlegend=False)
+            fig.update_layout(showlegend=False,uniformtext=dict(minsize=16,mode="hide"))
             plot(fig,590,"public_orgs_treemap",margin=dict(l=4,r=4,t=10,b=12))
             section_figures.setdefault("Presencia de socios", []).append(fig)
+            st.caption("MSF: Médicos Sin Fronteras · MdM: Médicos del Mundo · Esperanza: Proyecto Esperanza. Pase el cursor sobre un bloque para ver el nombre completo.")
 
     po=filt(d["offered_joined"]); pt=po.servicio.value_counts().head(10).reset_index(); pt.columns=["servicio","puntos"]; pt["foco"]="Salud pública"
     st.markdown("#### Áreas temáticas de acciones de salud pública")
