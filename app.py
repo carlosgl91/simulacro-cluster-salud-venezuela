@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import base64
 import io
+import json
 import math
 import re
 import sys
@@ -58,8 +59,49 @@ PUBLIC_PLACE_TYPES = [
     "Centro de protección",
     "Otro (especificar)",
 ]
+# Catálogo real de la pregunta 4.1 del F02 ("Seleccione las áreas o
+# servicios del establecimiento de salud que recibieron apoyo durante este
+# período") — la comparten F01 (bloque 5.1, dato real en areas.csv) y F02,
+# pero el histórico de reportes periódicos (resultados.csv) nunca capturó
+# esta pregunta por período. Autorizado explícitamente por la usuaria:
+# simular estos datos de forma determinística para este simulacro,
+# mientras no exista un histórico real de reportes F02 con esta pregunta.
+FACILITY_AREA_CATALOG = [
+    "Agua, saneamiento e higiene",
+    "Atención materna y obstétrica",
+    "Atención neonatal",
+    "Cirugía",
+    "Consulta externa",
+    "Emergencias",
+    "Farmacia y dispensación de medicamentos",
+    "Gestión y manejo de residuos hospitalarios",
+    "Hospitalización",
+    "Imagenología",
+    "Laboratorio clínico",
+    "Medicina interna",
+    "Odontología",
+    "Pediatría",
+    "Rehabilitación",
+    "Salud mental y apoyo psicosocial",
+    "Salud sexual y reproductiva",
+    "Vacunación",
+]
 
 st.set_page_config(page_title="Tablero de la Respuesta en Salud · Venezuela", page_icon="✚", layout="wide")
+
+
+@st.cache_data
+def load_municipio_geojson() -> dict:
+    """Límites municipales reales de Venezuela (OCHA/HDX vía el repositorio anterior del tablero),
+    para mapas de polígonos en vez de puntos. Se agrega "join_key" = "Estado | Municipio" a cada
+    feature porque el nombre de municipio solo no es único (p. ej. "Libertador" existe en varios
+    estados) — así se puede unir sin ambigüedad con los datos reales de estado+municipio."""
+    with open(DATA / "geografia" / "limites_municipales.geojson", encoding="utf-8") as f:
+        geo = json.load(f)
+    for feature in geo["features"]:
+        props = feature["properties"]
+        props["join_key"] = f"{props['adm1_name']} | {props['adm2_name']}"
+    return geo
 
 
 @st.cache_data
@@ -236,19 +278,25 @@ def prepare() -> dict[str, pd.DataFrame]:
     # Los formularios históricos no incluían inversión. Se genera una muestra
     # estable solo para probar cómo se leerá el nuevo campo F01 en el tablero.
     seed = pd.util.hash_pandas_object(points["id_punto"].astype(str), index=False).astype("uint64")
-    points["inversion_usd"] = ((seed % 196) + 5) * 1000
+    # 78 valores distintos (300 a 8.000, paso 100) en vez de los 16 de antes:
+    # con pocos valores posibles, el ranking de "mayor inversión" quedaba con
+    # varios puntos empatados justo en el máximo ($8.0k repetido), lo que se
+    # veía poco creíble. Con más granularidad el total sigue rondando el
+    # mismo orden de magnitud (~USD 1.000.000 sobre el universo completo)
+    # pero el top 10-12 ya no se ve idéntico ni tan "en cuadrícula".
+    points["inversion_usd"] = ((seed % 78) + 3) * 100
 
     results = t["results"].copy()
     results["area"] = results["indicador_codigo"].map(area_from_indicator)
     results = results.merge(rep[["id_reporte", "organizacion", "estado", "municipio", "lugar", "fecha_reporte", "foco"]], on="id_reporte", how="left", suffixes=("", "_rep"))
 
-    facility_services = t["facility_areas"].merge(fac[["id_establecimiento", "organizacion", "estado", "municipio", "lugar"]], on="id_establecimiento", how="left")
+    facility_services = t["facility_areas"].merge(fac[["id_establecimiento", "organizacion", "estado", "municipio", "lugar", "tipo_punto"]], on="id_establecimiento", how="left")
     facility_services["servicio"] = facility_services["area_servicio"].map(clean_service)
     # Bloque 5.2 del F01 ("Seleccione el tipo o los tipos de apoyo que serán
     # proporcionados"): es una pregunta real distinta de 5.1 (áreas/servicios
     # que reciben apoyo) — datos reales de apoyos.csv, nunca antes usados en
     # el tablero.
-    facility_supports = t["supports"].merge(fac[["id_establecimiento", "organizacion", "estado", "municipio", "lugar"]], on="id_establecimiento", how="left")
+    facility_supports = t["supports"].merge(fac[["id_establecimiento", "organizacion", "estado", "municipio", "lugar", "tipo_punto"]], on="id_establecimiento", how="left")
     facility_supports["tipo_apoyo"] = facility_supports["tipo_apoyo"].map(clean_service)
     offered = t["offered"].merge(t["places"][["id_servicio", "organizacion", "estado", "municipio", "nombre_sitio"]], on="id_servicio", how="left")
     offered["servicio"] = offered["servicio"].map(clean_service)
@@ -416,72 +464,166 @@ def _export_copy(fig: go.Figure) -> go.Figure:
     return export_fig
 
 
+# Plantilla de página para el PDF, calcada del formato del tablero anterior
+# (cluster-salud-venezuela.streamlit.app → "Descargar infografía general"):
+# banda navy superior con logos y título, tarjetas de métricas, paneles
+# blancos tipo tarjeta por gráfica, y pie con fuente + número de página.
+_PDF_HEADER_H = 96
+_PDF_SIDE = 30
+
+
+def _pdf_page_shell(c, w: float, h: float, kicker: str, title: str, subtitle: str, page_label: str) -> None:
+    c.setFillColor(colors.HexColor(PAPER)); c.rect(0, 0, w, h, fill=1, stroke=0)
+    c.setFillColor(colors.HexColor(NAVY)); c.rect(0, h - _PDF_HEADER_H, w, _PDF_HEADER_H, fill=1, stroke=0)
+    c.setFillColor(colors.HexColor("#9FC3E8")); c.setFont("Helvetica-Bold", 8.5)
+    c.drawString(_PDF_SIDE + 8, h - 24, kicker.upper())
+    c.setFillColor(colors.white); c.setFont("Helvetica-Bold", 21)
+    c.drawString(_PDF_SIDE + 8, h - 48, title[:70])
+    c.setFillColor(colors.HexColor("#C9DCEC")); c.setFont("Helvetica", 10)
+    c.drawString(_PDF_SIDE + 8, h - 65, subtitle[:95])
+    logo_path = ROOT / "logos_formularios_hd.png"
+    box_h = 0.0
+    if logo_path.exists():
+        try:
+            logo_img = ImageReader(str(logo_path))
+            logo_w, logo_h = logo_img.getSize()
+            box_w = 250.0; box_h = box_w * logo_h / logo_w
+            box_x = w - _PDF_SIDE - 8 - box_w; box_y = h - 16 - box_h
+            c.setFillColor(colors.white); c.roundRect(box_x - 8, box_y - 6, box_w + 16, box_h + 12, 5, fill=1, stroke=0)
+            c.drawImage(logo_img, box_x, box_y, width=box_w, height=box_h)
+        except Exception:
+            box_h = 0.0
+    c.setFillColor(colors.white); c.setFont("Helvetica", 8)
+    c.drawRightString(w - _PDF_SIDE - 8, h - _PDF_HEADER_H + 10, page_label)
+
+
+def _pdf_footer(c, w: float, page_num: int, total_pages: int) -> None:
+    c.setStrokeColor(colors.HexColor(NAVY)); c.setLineWidth(1.2)
+    c.line(_PDF_SIDE, 30, w - _PDF_SIDE, 30)
+    c.setFillColor(colors.HexColor(MUTED)); c.setFont("Helvetica", 7.5)
+    c.drawString(_PDF_SIDE, 18, "Fuente: simulacro con datos históricos y muestras piloto · Clúster Salud Venezuela · OPS/OMS")
+    c.setFillColor(colors.HexColor(NAVY)); c.setFont("Helvetica-Bold", 7.5)
+    c.drawRightString(w - _PDF_SIDE, 18, f"Página {page_num} de {total_pages}")
+
+
+def _pdf_card(c, x: float, y: float, w: float, h: float) -> None:
+    c.setFillColor(colors.white); c.roundRect(x, y, w, h, 7, fill=1, stroke=0)
+    c.setStrokeColor(colors.HexColor("#E2E6EA")); c.setLineWidth(0.7); c.roundRect(x, y, w, h, 7, fill=0, stroke=1)
+
+
 def make_pdf(
     module: str,
     metrics: list[tuple[str, str]],
     notes: list[str],
-    figures: list[go.Figure],
+    figures: list[tuple[str, go.Figure]],
 ) -> tuple[bytes, int]:
-    """Devuelve el PDF y el número de gráficas que no pudieron exportarse."""
+    """Devuelve el PDF (formato de tarjetas con banda de marca, igual que el tablero anterior) y el número de gráficas que no pudieron exportarse."""
     buffer = io.BytesIO(); page = landscape(A4); c = canvas.Canvas(buffer, pagesize=page)
     w, h = page
-    c.setFillColor(colors.HexColor(NAVY)); c.rect(0, h-92, w, 92, fill=1, stroke=0)
-    c.setFillColor(colors.white); c.setFont("Helvetica-Bold", 24); c.drawString(38, h-48, "Clúster Salud Venezuela")
-    c.setFont("Helvetica", 12); c.drawString(38, h-70, module)
-    x=38; y=h-140; per_row=4
-    for index, (label, value) in enumerate(metrics):
-        if index and index % per_row == 0:
-            x=38; y-=82
-        c.setFillColor(colors.HexColor(PALE)); c.roundRect(x,y-62,170,70,5,fill=1,stroke=0)
-        c.setFillColor(colors.HexColor(NAVY)); c.setFont("Helvetica-Bold",20); c.drawString(x+12,y-22,value)
-        c.setFont("Helvetica",8); c.setFillColor(colors.HexColor(MUTED)); c.drawString(x+12,y-42,label.upper()[:28]); x += 185
-    y -= 112; c.setFillColor(colors.HexColor(INK)); c.setFont("Helvetica-Bold",15); c.drawString(38,y,"Lectura ejecutiva")
-    c.setFont("Helvetica",10); y-=24
-    for note in notes:
-        words=note.split(); line=""
-        for word in words:
-            if stringWidth(line+" "+word,"Helvetica",10)>730:
-                c.drawString(50,y,"• "+line); y-=16; line=word
-            else: line=(line+" "+word).strip()
-        c.drawString(50,y,"• "+line); y-=22
-    c.setFont("Helvetica-Oblique",8); c.setFillColor(colors.HexColor(MUTED)); c.drawString(38,28,"Simulacro con datos históricos y muestras piloto. No representa la base definitiva de los nuevos F01/F02.")
+    today_label = pd.Timestamp.today().strftime("%d/%m/%Y")
 
-    # Una página horizontal por cada gráfica de las secciones seleccionadas,
-    # exportada a imagen para que la infografía incluya las visualizaciones
-    # reales y no solo el resumen de texto. Las gráficas se exportan todas
-    # juntas con pio.write_images (un solo navegador Chromium para todo el
-    # lote) en vez de una llamada a to_image() por gráfica: esta última abre
-    # y cierra un navegador por cada imagen, lo que además de ser mucho más
-    # lento es la causa más probable de descargas que fallaban por completo
-    # al pedir varias secciones a la vez.
+    # Las gráficas se exportan todas juntas con pio.write_images (un solo
+    # navegador Chromium para todo el lote) en vez de una llamada a
+    # to_image() por gráfica: esta última abre y cierra un navegador por
+    # cada imagen, lo que además de ser mucho más lento es la causa más
+    # probable de descargas que fallaban por completo al pedir varias
+    # secciones a la vez.
     failed = 0
+    ok: list[tuple[Path, str]] = []
+    tmp_dir_ctx = tempfile.TemporaryDirectory()
+    tmp_dir = tmp_dir_ctx.name
     if figures:
-        export_figs = [_export_copy(fig) for fig in figures]
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            paths = [Path(tmp_dir) / f"fig_{i}.png" for i in range(len(export_figs))]
-            ok_paths: list[Path] = []
-            try:
-                pio.write_images(export_figs, paths, format="png", scale=2)
-                ok_paths = paths
-            except Exception:
-                # Si el lote falla por una sola gráfica problemática, se
-                # reintenta una por una para no perder toda la descarga.
-                for fig, path in zip(export_figs, paths):
-                    try:
-                        pio.write_image(fig, path, format="png", scale=2)
-                        ok_paths.append(path)
-                    except Exception:
-                        failed += 1
-            for path in ok_paths:
-                c.showPage()
-                image = ImageReader(str(path))
-                img_w, img_h = image.getSize()
-                max_w, max_h = w - 60, h - 60
-                scale = min(max_w / img_w, max_h / img_h)
-                draw_w, draw_h = img_w * scale, img_h * scale
-                c.drawImage(image, (w - draw_w) / 2, (h - draw_h) / 2, width=draw_w, height=draw_h)
+        export_figs = [_export_copy(fig) for _, fig in figures]
+        paths = [Path(tmp_dir) / f"fig_{i}.png" for i in range(len(export_figs))]
+        try:
+            pio.write_images(export_figs, paths, format="png", scale=2)
+            ok = list(zip(paths, [name for name, _ in figures]))
+        except Exception:
+            # Si el lote falla por una sola gráfica problemática, se
+            # reintenta una por una para no perder toda la descarga.
+            for (name, fig), path in zip(figures, paths):
+                try:
+                    pio.write_image(_export_copy(fig), path, format="png", scale=2)
+                    ok.append((path, name))
+                except Exception:
+                    failed += 1
 
-    c.save(); return buffer.getvalue(), failed
+    total_pages = 1 + len(ok)
+    page_num = 1
+
+    # Portada: banda de marca, tarjetas de métricas y lectura ejecutiva en
+    # un panel blanco — mismo lenguaje visual que las páginas de gráficas.
+    _pdf_page_shell(c, w, h, "Simulacro Clúster Salud", module, "Infografía general con los datos y filtros actualmente aplicados en el tablero.", f"Generado el {today_label}")
+    card_top = h - _PDF_HEADER_H - 14
+    metrics_h = 78
+    _pdf_card(c, _PDF_SIDE, card_top - metrics_h, w - 2 * _PDF_SIDE, metrics_h)
+    card_w = (w - 2 * _PDF_SIDE - 16) / max(len(metrics), 1)
+    for i, (label, value) in enumerate(metrics):
+        cx = _PDF_SIDE + 8 + i * card_w
+        avail = card_w - 14
+        # El valor y la etiqueta se ajustan al ancho real de la tarjeta (en
+        # vez de un tamaño/recorte fijo): con 7 tarjetas en una fila, textos
+        # largos como "Total profesionales reportados" o "USD 959.600" se
+        # solapaban con la tarjeta siguiente.
+        vsize = 18.0
+        while vsize > 9 and stringWidth(value, "Helvetica-Bold", vsize) > avail:
+            vsize -= 0.5
+        c.setFillColor(colors.HexColor(NAVY)); c.setFont("Helvetica-Bold", vsize)
+        c.drawString(cx, card_top - 32, value)
+        words = label.upper().split(); lines: list[str] = []; line = ""
+        for word in words:
+            trial = (line + " " + word).strip()
+            if line and stringWidth(trial, "Helvetica", 7.5) > avail:
+                lines.append(line); line = word
+            else:
+                line = trial
+        if line: lines.append(line)
+        c.setFillColor(colors.HexColor(MUTED)); c.setFont("Helvetica", 7.5)
+        for li, ln in enumerate(lines[:2]):
+            c.drawString(cx, card_top - 48 - li * 9, ln)
+    notes_top = card_top - metrics_h - 14
+    notes_bottom = 46
+    _pdf_card(c, _PDF_SIDE, notes_bottom, w - 2 * _PDF_SIDE, notes_top - notes_bottom)
+    c.setFillColor(colors.HexColor(NAVY)); c.setFont("Helvetica-Bold", 13)
+    c.drawString(_PDF_SIDE + 18, notes_top - 24, "Lectura ejecutiva")
+    c.setFillColor(colors.HexColor(INK)); c.setFont("Helvetica", 9.5)
+    y = notes_top - 44
+    for note in notes:
+        words = note.split(); line = ""
+        for word in words:
+            if stringWidth(line + " " + word, "Helvetica", 9.5) > w - 2 * _PDF_SIDE - 56:
+                c.drawString(_PDF_SIDE + 18, y, "•  " + line); y -= 15; line = word
+            else:
+                line = (line + " " + word).strip()
+        c.drawString(_PDF_SIDE + 18, y, "•  " + line); y -= 20
+    _pdf_footer(c, w, page_num, total_pages)
+
+    # Una página horizontal por gráfica, cada una dentro de su propio panel
+    # blanco tipo tarjeta. Las gráficas en pantalla no llevan título propio
+    # (el título visible es un encabezado de Streamlit aparte, fuera de la
+    # figura de Plotly), así que el título de cada página se dibuja aparte
+    # con reportlab (el nombre de la sección a la que pertenece la gráfica).
+    for path, name in ok:
+        page_num += 1
+        c.showPage()
+        _pdf_page_shell(c, w, h, module, name, f"Gráfica {page_num - 1} de {len(ok)} · Simulacro Clúster Salud", f"Generado el {today_label}")
+        panel_top = h - _PDF_HEADER_H - 14
+        panel_bottom = 46
+        _pdf_card(c, _PDF_SIDE, panel_bottom, w - 2 * _PDF_SIDE, panel_top - panel_bottom)
+        image = ImageReader(str(path))
+        img_w, img_h = image.getSize()
+        max_w, max_h = w - 2 * _PDF_SIDE - 36, panel_top - panel_bottom - 30
+        scale = min(max_w / img_w, max_h / img_h)
+        draw_w, draw_h = img_w * scale, img_h * scale
+        img_x = _PDF_SIDE + 18 + (max_w - draw_w) / 2
+        img_y = panel_bottom + 14 + (max_h - draw_h) / 2
+        c.drawImage(image, img_x, img_y, width=draw_w, height=draw_h)
+        _pdf_footer(c, w, page_num, total_pages)
+
+    c.save()
+    pdf_bytes = buffer.getvalue()
+    tmp_dir_ctx.cleanup()
+    return pdf_bytes, failed
 
 
 d = prepare()
@@ -491,8 +633,8 @@ st.markdown(f"""
 <style>
   .stApp{{background:{PAPER};color:{INK}}}.block-container{{max-width:1480px;padding-top:1.1rem;padding-bottom:4rem}}
   [data-testid="stSidebar"]{{background:#F0F3F5;border-right:1px solid #D7DEE4}}
-  .logo-crop{{height:116px;overflow:hidden;background:white;border:1px solid #DCE3E8;border-radius:16px;margin-bottom:14px}}
-  .logo-crop img{{width:100%;display:block;transform:translateY(-6.4%);}}
+  .logo-crop{{max-width:1660px;margin:0 auto 20px;padding:0 8px;background:transparent}}
+  .logo-crop img{{width:100%;height:auto;display:block;filter:contrast(1.02);}}
   .hero{{background:linear-gradient(120deg,{NAVY},{BLUE});color:white;border-radius:18px;padding:16px 28px;margin:0 0 14px;box-shadow:0 12px 26px #17365d22}}
   .hero b{{font-size:.72rem;letter-spacing:.16em}}.hero h1{{font-size:2.3rem;margin:.35rem 0 .25rem;color:white}}.hero p{{font-size:1rem;margin:0;color:#E9F1F7}}
   .hero small{{display:block;margin-top:.3rem;color:#C9DCEC;font-size:.82rem}}
@@ -505,8 +647,13 @@ st.markdown(f"""
   .metric span{{display:block;text-transform:uppercase;font-size:.68rem;letter-spacing:.08em;color:{MUTED};font-weight:700}}
   .metric strong{{display:block;font-size:2rem;color:{NAVY};margin:.2rem 0}}.metric small{{color:{MUTED}}}
   .pilot{{background:#FFF6D8;border:1px solid #E7CF72;border-radius:8px;padding:10px 13px;color:#67551C;font-size:.85rem}}
+  .index-label{{color:{MUTED};font-size:.78rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;margin:10px 0 8px}}
   .index{{display:flex;gap:8px;flex-wrap:wrap;margin:2px 0 20px}}
   .index a{{text-decoration:none;color:{NAVY};background:white;border:1px solid #CBD5DD;border-radius:999px;padding:7px 12px;font-weight:700;font-size:.82rem}}
+  .index a::before{{content:"↓ ";color:{BLUE}}}
+  .ext-links{{display:flex;gap:8px;flex-wrap:wrap;margin:2px 0 20px}}
+  .ext-links a{{text-decoration:none;color:{NAVY};background:white;border:1px solid #CBD5DD;border-radius:999px;padding:7px 12px;font-weight:700;font-size:.82rem}}
+  .ext-links a::after{{content:" ↗";color:{BLUE}}}
   .sidebar-nav{{display:flex;gap:8px;margin:4px 0 16px}}
   .sidebar-nav a{{flex:1;text-decoration:none;text-align:center;color:{NAVY};background:white;border:1px solid #CBD5DD;border-radius:8px;padding:8px 6px;font-weight:700;font-size:.78rem}}
   .sidebar-nav a:hover{{border-color:{BLUE};color:{BLUE}}}
@@ -521,12 +668,12 @@ st.markdown(f"""
   .stTabs [data-baseweb="tab-list"]{{gap:1.2rem;border-bottom:1px solid #AEBBC5}}
   .stTabs [aria-selected="true"]{{border-bottom:4px solid {RED}}}
   @media print{{[data-testid="stSidebar"],header,[data-testid="stToolbar"],.stRadio,.stDownloadButton{{display:none!important}}.block-container{{max-width:none;padding:0}}.hero{{box-shadow:none}}.print-break{{break-before:page}}}}
-  @media(max-width:900px){{.metric-row{{grid-template-columns:repeat(2,1fr)}}.logo-crop{{height:70px}}}}
+  @media(max-width:900px){{.metric-row{{grid-template-columns:repeat(2,1fr)}}}}
 </style>
 """, unsafe_allow_html=True)
 
 st.markdown('<div id="top"></div>', unsafe_allow_html=True)
-logo = img_data(ROOT / "logos_referencia.png")
+logo = img_data(ROOT / "logos_formularios_hd.png")
 if logo:
     st.markdown(f'<div class="logo-crop"><img src="data:image/png;base64,{logo}" alt="Logotipos de las organizaciones participantes"></div>', unsafe_allow_html=True)
 report_dates = pd.concat([
@@ -566,10 +713,9 @@ date_start, date_end = st.sidebar.slider(
     value=(default_start, date_ceiling),
     format="DD/MM/YYYY",
 )
-st.sidebar.caption("Los filtros se aplican al módulo visible. Los datos piloto no representan envíos de los formularios nuevos.")
-nav_buttons = '<div class="sidebar-nav"><a href="#top">🏠 Inicio</a>'
+nav_buttons = '<div class="sidebar-nav"><a href="#top">Inicio</a>'
 if module.startswith("Registro"):
-    nav_buttons += '<a href="#calendario-f01">📅 Calendario</a>'
+    nav_buttons += '<a href="#calendario-f01">Calendario</a>'
 nav_buttons += '</div>'
 st.sidebar.markdown(nav_buttons, unsafe_allow_html=True)
 
@@ -606,19 +752,20 @@ if module.startswith("Registro"):
     f01_report_dates=pd.concat([pd.to_datetime(d["facilities"].fecha_reporte,errors="coerce"),pd.to_datetime(d["reports_prepared"].fecha_reporte,errors="coerce")]).dropna()
     first_f01=f01_report_dates.min().strftime("%d/%m/%Y"); last_f01=f01_report_dates.max().strftime("%d/%m/%Y")
     section_band("SOCIOS Y APOYOS DEL CLÚSTER SALUD", "¿Quiénes son los socios, qué ofrecen, a qué establecimientos de salud apoyan y qué acciones de salud pública realizan?")
-    st.markdown('<div class="index"><a href="#mapa-f01">Mapa</a><a href="#calendario-f01">Calendario</a><a href="#socios-f01">Socios</a><a href="#territorio-f01">Alcance territorial</a><a href="#apoyos-establecimientos-f01">Apoyos a establecimientos</a><a href="#acciones-publicas-f01">Acciones de salud pública</a><a href="#capacidad-f01">Capacidad operativa</a><a href="#inversion-f01">Inversión</a><a href="#donantes-f01">Fuentes de apoyo</a></div>',unsafe_allow_html=True)
+    st.markdown('<div class="index-label">Ir a la sección</div><div class="index"><a href="#mapa-f01">01 · Mapa</a><a href="#calendario-f01">02 · Calendario</a><a href="#socios-f01">03 · Socios</a><a href="#territorio-f01">04 · Alcance territorial</a><a href="#apoyos-establecimientos-f01">05 · Apoyos a establecimientos</a><a href="#acciones-publicas-f01">06 · Acciones de salud pública</a><a href="#capacidad-f01">07 · Capacidad operativa</a><a href="#inversion-f01">08 · Inversión</a><a href="#donantes-f01">09 · Fuentes de apoyo</a></div>',unsafe_allow_html=True)
     professional_total=pd.to_numeric(staffing[all_staff_cols].stack(),errors="coerce").sum()
     parish_count=p.loc[p.parroquia.ne("No reportada"),"parroquia"].nunique()
     cards=[
         ("Estados",num(p.estado.nunique()),""),
         ("Municipios",num(p.municipio.nunique()),""),
-        ("Parroquias",num(parish_count),"con dato disponible"),
-        ("Socios",num(p.organizacion.nunique()),"con puntos en el período seleccionado"),
+        ("Parroquias",num(parish_count),""),
+        ("Socios",num(p.organizacion.nunique()),""),
         ("Puntos de intervención",num(p.id_punto.nunique()),""),
-        ("Total profesionales reportados",num(professional_total),"en puntos vigentes"),
+        ("Total profesionales reportados",num(professional_total),""),
         ("Inversión registrada",f"USD {num(p.inversion_usd.sum())}",""),
     ]
-    st.markdown('<div class="metric-row">'+''.join(metric(*x) for x in cards)+'</div>',unsafe_allow_html=True)
+    st.markdown('<h3>Panorama general de la oferta vigente</h3>',unsafe_allow_html=True)
+    st.markdown('<div class="metric-row" style="grid-template-columns:repeat(7,1fr)">'+''.join(metric(*x) for x in cards)+'</div>',unsafe_allow_html=True)
     st.markdown('<div id="mapa-f01" class="section-kicker">01 · Localización</div><h2>Mapa de intervenciones registradas</h2>',unsafe_allow_html=True)
     mapped=p.dropna(subset=["latitud","longitud"])
     if mapped.empty: st.info("No hay coordenadas para estos filtros.")
@@ -1015,7 +1162,9 @@ if module.startswith("Registro"):
     # serán proporcionados"). El formulario nunca usa la palabra "oferta"
     # para esto — usa "apoyo".
     st.markdown('<div id="apoyos-establecimientos-f01" class="section-kicker">05 · Apoyos a establecimientos de salud</div><h2>Servicios y apoyos que las organizaciones brindan</h2>',unsafe_allow_html=True)
-    facility_points=p[p.foco.eq("Establecimiento de salud")]
+    facility_points_all=p[p.foco.eq("Establecimiento de salud")]
+    facility_type_filter=st.selectbox("Filtrar por tipo de establecimiento de salud",["Todos"]+sorted(facility_points_all.tipo_punto.dropna().unique()),key="facility_type_filter")
+    facility_points=facility_points_all[facility_points_all.tipo_punto.eq(facility_type_filter)] if facility_type_filter!="Todos" else facility_points_all
     facility_types=facility_points.groupby("tipo_punto").id_punto.nunique().reset_index(name="puntos")
     facility_orgs=facility_points.groupby("organizacion").id_punto.nunique().reset_index(name="puntos")
 
@@ -1054,7 +1203,9 @@ if module.startswith("Registro"):
             st.caption("El tamaño de cada bloque representa el número de establecimientos apoyados.")
 
     st.markdown("#### Áreas o servicios del establecimiento que reciben apoyo")
-    fs=filt(d["facility_services_joined"]); ft=fs.servicio.value_counts().head(10).reset_index(); ft.columns=["servicio","puntos"]; ft["foco"]="Establecimiento de salud"
+    fs=filt(d["facility_services_joined"])
+    if facility_type_filter!="Todos": fs=fs[fs.tipo_punto.eq(facility_type_filter)]
+    ft=fs.servicio.value_counts().head(10).reset_index(); ft.columns=["servicio","puntos"]; ft["foco"]="Establecimiento de salud"
     if ft.empty: st.info("No hay servicios registrados para los filtros seleccionados.")
     else:
         fig=px.treemap(ft,path=["servicio"],values="puntos",color="puntos",color_continuous_scale=[[0,"#F8D8D3"],[1,RED]])
@@ -1065,7 +1216,9 @@ if module.startswith("Registro"):
     # reciben apoyo, arriba; 5.2 tipo de apoyo brindado, aquí abajo, en el
     # mismo orden que el formulario) — antes solo se mostraba la primera.
     st.markdown("#### Tipo de apoyo proporcionado")
-    fsup=filt(d["facility_supports_joined"]); ftsup=fsup.tipo_apoyo.value_counts().head(10).reset_index(); ftsup.columns=["tipo_apoyo","puntos"]
+    fsup=filt(d["facility_supports_joined"])
+    if facility_type_filter!="Todos": fsup=fsup[fsup.tipo_punto.eq(facility_type_filter)]
+    ftsup=fsup.tipo_apoyo.value_counts().head(10).reset_index(); ftsup.columns=["tipo_apoyo","puntos"]
     if ftsup.empty: st.info("No hay tipos de apoyo registrados para los filtros seleccionados.")
     else:
         fig=px.treemap(ftsup,path=["tipo_apoyo"],values="puntos",color="puntos",color_continuous_scale=[[0,"#F8D8D3"],[1,RED]])
@@ -1128,21 +1281,46 @@ if module.startswith("Registro"):
     section_figures.setdefault("Paquetes de apoyo", []).append(fig)
     st.caption("Las modalidades son de selección múltiple; el porcentaje muestra la distribución de las selecciones reportadas.")
 
-    st.markdown("### Personal disponible por perfil")
-    # Filtro local encadenado (Estado → Municipio → Socio), igual que en
-    # el tablero anterior: independiente de los filtros de la barra
-    # lateral, para poder acotar solo esta gráfica de personal.
-    wf_state_col,wf_muni_col,wf_org_col=st.columns(3)
+    st.markdown("### Filtrar por socio y punto")
+    st.caption("Aplica al personal disponible y a los días/horarios de atención, ambos más abajo. Incluye todos los socios y puntos registrados en el F01 (ambos focos); el personal y los horarios solo existen para los que completaron ese bloque del formulario — si no hay datos, se indica debajo de cada gráfica.")
+    # Filtro local encadenado (Estado → Municipio → Socio → Punto), igual
+    # que en el tablero anterior: independiente de los filtros de la barra
+    # lateral, para poder acotar solo esta gráfica de personal y la de
+    # días/horarios de atención de abajo. Las opciones de cada control salen
+    # del universo completo de puntos registrados en F01 ("p", ambos focos,
+    # no solo el bloque de cobertura/personal que es más chico) para que
+    # también aparezcan los socios de Salud pública; el dato de personal y
+    # horarios en sí sigue viniendo exclusivamente de "staffing" (el único
+    # con esos campos reales) — cuando no hay datos para la combinación
+    # elegida, las gráficas de abajo ya lo indican en vez de inventar algo.
+    # Socio va antes que Punto a propósito: si un punto tiene más de una
+    # organización (p. ej. "La Guaira" o "La Peñita" en los datos piloto),
+    # dejar Socio en "Todos" y elegir el punto muestra esas organizaciones
+    # en el mensaje de abajo, en vez de ocultarlas.
+    wf_state_col,wf_muni_col,wf_org_col,wf_point_col=st.columns(4)
     with wf_state_col:
-        wf_state=st.selectbox("Estado",["Todos"]+sorted(staffing.estado.dropna().unique()),key="workforce_state")
-    wf_scope=staffing[staffing.estado.eq(wf_state)] if wf_state!="Todos" else staffing
+        wf_state=st.selectbox("Estado",["Todos"]+sorted(set(staffing.estado.dropna())|set(p.estado.dropna())),key="workforce_state")
+    p_scope=p[p.estado.eq(wf_state)] if wf_state!="Todos" else p
+    staff_scope=staffing[staffing.estado.eq(wf_state)] if wf_state!="Todos" else staffing
     with wf_muni_col:
-        wf_muni=st.selectbox("Municipio",["Todos"]+sorted(wf_scope.municipio.dropna().unique()),key="workforce_municipality")
-    wf_scope=wf_scope[wf_scope.municipio.eq(wf_muni)] if wf_muni!="Todos" else wf_scope
+        wf_muni=st.selectbox("Municipio",["Todos"]+sorted(set(staff_scope.municipio.dropna())|set(p_scope.municipio.dropna())),key="workforce_municipality")
+    p_scope=p_scope[p_scope.municipio.eq(wf_muni)] if wf_muni!="Todos" else p_scope
+    staff_scope=staff_scope[staff_scope.municipio.eq(wf_muni)] if wf_muni!="Todos" else staff_scope
     with wf_org_col:
-        wf_org=st.selectbox("Socio",["Todos"]+sorted(wf_scope.organizacion.dropna().unique()),key="workforce_organization")
-    wf_scope=wf_scope[wf_scope.organizacion.eq(wf_org)] if wf_org!="Todos" else wf_scope
+        wf_org=st.selectbox("Socio",["Todos"]+sorted(set(staff_scope.organizacion.dropna())|set(p_scope.organizacion.dropna())),key="workforce_organization")
+    p_scope=p_scope[p_scope.organizacion.eq(wf_org)] if wf_org!="Todos" else p_scope
+    staff_scope=staff_scope[staff_scope.organizacion.eq(wf_org)] if wf_org!="Todos" else staff_scope
+    with wf_point_col:
+        wf_point=st.selectbox("Punto",["Todos"]+sorted(set(staff_scope.nombre_sitio.dropna())|set(p_scope.lugar.dropna())),key="workforce_point")
+    wf_scope=staff_scope[staff_scope.nombre_sitio.eq(wf_point)] if wf_point!="Todos" else staff_scope
+    if wf_point!="Todos" and wf_org=="Todos":
+        point_orgs=sorted(wf_scope.organizacion.dropna().unique())
+        if len(point_orgs)>1:
+            st.caption(f"Este punto tiene más de una organización registrada: {', '.join(point_orgs)}.")
+        elif wf_scope.empty:
+            st.caption("Este punto no tiene personal ni horarios reportados en el bloque de cobertura del F01 (bloque distinto del registro general de puntos).")
 
+    st.markdown("### Personal disponible por perfil")
     staff_cols=[c for c in staffing.columns if c.startswith("personal_")]
     totals=pd.to_numeric(wf_scope[staff_cols].stack(),errors="coerce").unstack().sum().sort_values(ascending=False).head(12).sort_values().reset_index(); totals.columns=["perfil","personas"]; totals["perfil"]=totals.perfil.str.replace("personal_","",regex=False).str.replace("_"," ").str.title()
     totals["perfil"]=totals["perfil"].replace({"Medico":"Médicos(as)","Enfermero":"Enfermeros(as)","Administrativos":"Administrativos(as)","Psicologo":"Psicólogos(as)","Pediatria":"Pediatría","Ginecologia":"Ginecología","Odontologos":"Odontólogos(as)","Psiquiatra":"Psiquiatras"})
@@ -1153,16 +1331,60 @@ if module.startswith("Registro"):
         fig.update_traces(texttemplate="<b>%{label}</b><br>%{value}",textfont_size=15); plot(fig,590,"staffing_tree")
         section_figures.setdefault("Personal", []).append(fig)
 
+    st.markdown("### Días y horarios de atención")
+    st.caption("Usa el filtro de Estado, Municipio, Socio y Punto de la sección anterior.")
+    day_cols={"dia_lunes":"Lun","dia_martes":"Mar","dia_miercoles":"Mié","dia_jueves":"Jue","dia_viernes":"Vie","dia_sabado":"Sáb","dia_domingo":"Dom"}
+    hour_cols={"horario_manana":"Mañana","horario_tarde":"Tarde","horario_noche":"Noche","horario_24_7":"24 horas"}
+    schedule_scope=wf_scope[wf_scope.get("dias_horas_aplica",pd.Series(dtype="object")).eq("Aplica")] if "dias_horas_aplica" in wf_scope else wf_scope.iloc[0:0]
+    if schedule_scope.empty or not set(day_cols)|set(hour_cols)<=set(schedule_scope.columns):
+        st.info("No hay días u horarios de atención reportados para la selección actual.")
+    else:
+        matrix=pd.DataFrame(
+            [[int((pd.to_numeric(schedule_scope[d],errors="coerce").fillna(0)*pd.to_numeric(schedule_scope[h],errors="coerce").fillna(0)).sum()) for d in day_cols] for h in hour_cols],
+            index=list(hour_cols.values()),columns=list(day_cols.values()),
+        )
+        if matrix.values.sum()==0:
+            st.info(f"Los {len(schedule_scope)} punto(s) de la selección actual marcaron el bloque de días/horarios como «Aplica», pero no registraron ningún día ni horario específico.")
+        else:
+            fig=px.imshow(matrix,text_auto=True,color_continuous_scale=[[0,"#EFF4F8"],[1,NAVY]],labels=dict(x="Día",y="Horario",color="Puntos"),aspect="auto",zmin=0,zmax=max(1,matrix.values.max()))
+            fig.update_xaxes(side="top"); fig.update_traces(textfont_size=14)
+            plot(fig,340,"schedule_heatmap")
+            section_figures.setdefault("Personal", []).append(fig)
+            st.caption(f"Con base en los {len(schedule_scope)} puntos que reportaron días y horarios de atención en el F01 (bloque «Días y horas de atención»); el resto de los puntos de la selección actual no tiene este dato registrado.")
+
     st.markdown(f'<div id="inversion-f01" class="section-kicker">08 · Recursos movilizados</div><h2>Inversión registrada · USD {num(p.inversion_usd.sum())}</h2>',unsafe_allow_html=True)
     st.caption(f"Corresponde a los puntos con reportes entre el {first_f01} y el {last_f01} (periodo de reportes del F01 indicado arriba).")
-    inv=p.groupby(["lugar","foco"],as_index=False).inversion_usd.sum().nlargest(12,"inversion_usd").sort_values("inversion_usd")
+    inv_all=p.groupby(["lugar","foco"],as_index=False).inversion_usd.sum().sort_values("inversion_usd",ascending=False)
     st.markdown("### Puntos con mayor inversión")
     # Rojo/amarillo por foco, igual que el mapa y "Puntos registrados por
     # foco": esta gráfica también compara ambos focos a la vez.
     investment_focus_colors={"Establecimiento de salud":RED,"Salud pública":YELLOW}
-    fig=px.bar(inv,x="inversion_usd",y="lugar",color="foco",orientation="h",text_auto="$.2s",color_discrete_map=investment_focus_colors,labels={"inversion_usd":"Inversión (USD)","lugar":"","foco":"Foco de intervención"},barmode="stack")
-    fig.update_traces(textposition="outside"); plot(fig,540,"f01_investment")
-    section_figures.setdefault("Inversión", []).append(fig)
+    # Nombres de sitio muy largos (algunos combinan varios lugares en un solo
+    # texto, p. ej. "Campamentos transitorios: Polideportivo José María
+    # Vargas, Estadio Cesar Nieves y Mare Abajo") empujaban las barras fuera
+    # de la vista. Se recorta solo la etiqueta del eje; el nombre completo
+    # sigue disponible en el hover.
+    short_lugar=lambda n: n if len(n)<=34 else n[:33].rstrip()+"…"
+    def _investment_bar(rows,key,height):
+        # Importante: la categoría del eje es "lugar" completo, no el
+        # nombre recortado — dos sitios distintos podían compartir los
+        # mismos primeros 34 caracteres (p. ej. dos "Campamentos
+        # transitorios: Polideportivo…" distintos) y truncarlos como
+        # categoría los fusionaba en una sola barra, rompiendo el orden y
+        # sumando montos de dos puntos distintos como si fueran uno. El
+        # recorte ahora es solo texto de la etiqueta (ticktext), no la
+        # categoría que Plotly usa para agrupar y ordenar.
+        order=rows.groupby("lugar").inversion_usd.sum().sort_values(ascending=False).index.tolist()
+        fig=px.bar(rows,x="inversion_usd",y="lugar",color="foco",orientation="h",text_auto="$.2s",category_orders={"lugar":order},color_discrete_map=investment_focus_colors,labels={"inversion_usd":"Inversión (USD)","lugar":"","foco":"Foco de intervención"},barmode="stack")
+        fig.update_traces(textposition="outside")
+        fig.update_yaxes(tickvals=order,ticktext=[short_lugar(n) for n in order])
+        plot(fig,height,key)
+        section_figures.setdefault("Inversión", []).append(fig)
+    top_inv,rest_inv=inv_all.head(12),inv_all.iloc[12:]
+    _investment_bar(top_inv,"f01_investment",540)
+    if not rest_inv.empty:
+        with st.expander(f"Ver los {len(rest_inv)} puntos restantes"):
+            _investment_bar(rest_inv,"f01_investment_rest",max(320,40*len(rest_inv)+80))
 
     st.markdown("### Inversión por municipio")
     # Un solo gráfico, apilado por foco. Se usa municipio (no parroquia):
@@ -1176,38 +1398,47 @@ if module.startswith("Registro"):
     if ranked.empty:
         st.info("No hay inversión registrada por municipio para los filtros seleccionados.")
     else:
-        # Vargas concentra más de 20 veces la inversión del siguiente
-        # municipio: incluirlo en la misma escala lineal que el resto lo
-        # aplasta (barra de 1-2px) o, si se recorta el eje, la barra se ve
-        # "rota" sin indicar su valor real — ninguna de las dos se ve
-        # profesional. En su lugar, se destaca aparte como cifra editorial
-        # y el gráfico compara el resto de los municipios en una escala que
-        # sí los hace legibles, ordenado de mayor a menor de arriba hacia
-        # abajo (igual que un ranking de The Economist/FT).
+        # El municipio líder puede concentrar mucha más inversión que el
+        # resto; se destaca también como cifra editorial en una tarjeta
+        # arriba del gráfico (con su desglose por foco), pero sigue
+        # apareciendo como la primera barra del ranking de abajo — ver nota
+        # más abajo sobre por qué ya no se excluye del gráfico.
         top_municipio=ranked.index[0]; top_total=ranked.iloc[0]
-        rest_order=ranked.index[1:].tolist()
         top_breakdown=muni_inv[muni_inv.municipio.eq(top_municipio)].set_index("foco").inversion_usd
         top_estab=top_breakdown.get("Establecimiento de salud",0); top_salud=top_breakdown.get("Salud pública",0)
         share_estab=int(round(100*top_estab/top_total)) if top_total else 0
+        multiple=f" ({int(top_total/ranked.iloc[1])}x el siguiente municipio)" if len(ranked)>1 and ranked.iloc[1] else ""
         st.markdown(f'''<div style="background:{PALE};border-left:4px solid {NAVY};border-radius:2px;padding:16px 22px;margin-bottom:16px;">
 <div style="font-size:11px;font-weight:600;color:{MUTED};text-transform:uppercase;letter-spacing:.06em;">Municipio con mayor inversión</div>
 <div style="display:flex;align-items:baseline;gap:10px;margin-top:2px;">
 <span style="font-size:28px;font-weight:700;color:{INK};font-family:Georgia,serif;">{top_municipio}</span>
 <span style="font-size:17px;color:{MUTED};">USD {num(top_total)}</span>
 </div>
-<div style="font-size:13px;color:{MUTED};margin-top:4px;">{share_estab}% en establecimientos de salud (USD {num(top_estab)}) · {100-share_estab}% en salud pública (USD {num(top_salud)}) — más de {int(top_total/ranked.iloc[1])}x el siguiente municipio, por eso se muestra aparte y no en la escala del gráfico.</div>
+<div style="font-size:13px;color:{MUTED};margin-top:4px;">{share_estab}% en establecimientos de salud (USD {num(top_estab)}) · {100-share_estab}% en salud pública (USD {num(top_salud)}){multiple} — también es la primera barra del gráfico de abajo.</div>
 </div>''',unsafe_allow_html=True)
-        rest=muni_inv[muni_inv.municipio.isin(rest_order)]
-        if rest.empty:
-            st.info("No hay otros municipios con inversión registrada para los filtros seleccionados.")
-        else:
-            fig=px.bar(rest,x="inversion_usd",y="municipio",color="foco",orientation="h",barmode="stack",text_auto="$,.0f",category_orders={"municipio":rest_order},color_discrete_map=investment_focus_colors,labels={"inversion_usd":"Inversión (USD)","municipio":"","foco":"Foco de intervención"})
-            fig.update_traces(textposition="outside",textfont=dict(size=13),marker_line_width=0)
-            fig.update_layout(bargap=0.35,legend=dict(orientation="h",yanchor="bottom",y=1.02,xanchor="right",x=1))
-            fig.update_xaxes(showgrid=True,gridcolor="#E4DFD2",tickfont=dict(size=12))
-            fig.update_yaxes(showgrid=False,tickfont=dict(size=13,color=INK),ticksuffix="  ")
-            plot(fig,max(320,54+42*len(rest_order)),"f01_muni_investment",margin=dict(l=16,r=64,t=28,b=18))
-            section_figures.setdefault("Inversión", []).append(fig)
+        # Antes se excluía el municipio con mayor inversión del gráfico de
+        # abajo (para que su barra, mucho más grande, no aplastara al resto
+        # en la misma escala lineal) y solo se mostraba en la tarjeta de
+        # arriba — pero eso hacía parecer que faltaba en la lista, lo cual
+        # confundía más de lo que ayudaba. Ahora aparece en ambos lugares:
+        # la tarjeta explica el detalle, y el gráfico lo muestra como la
+        # primera barra del ranking completo, sin ocultar nada.
+        # Vargas concentra ~20x la inversión del siguiente municipio (tiene
+        # muchos más puntos, no es un error): en escala lineal esto aplasta
+        # el resto a barras de 1-2px con las etiquetas superpuestas. Se usa
+        # escala logarítmica para que todos los municipios queden legibles
+        # a la vez, y se ocultan las etiquetas de segmentos muy chicos
+        # (<USD 3.000) para que el texto no se solape sobre barras angostas.
+        order=ranked.index.tolist()
+        muni_inv["etiqueta"]=muni_inv.inversion_usd.map(lambda v: f"${v:,.0f}" if v>=3000 else "")
+        fig=px.bar(muni_inv,x="inversion_usd",y="municipio",color="foco",orientation="h",barmode="stack",text="etiqueta",category_orders={"municipio":order},color_discrete_map=investment_focus_colors,labels={"inversion_usd":"Inversión (USD)","municipio":"","foco":"Foco de intervención"})
+        fig.update_traces(textposition="outside",textfont=dict(size=13),marker_line_width=0,constraintext="none",cliponaxis=False)
+        fig.update_layout(bargap=0.35,legend=dict(orientation="h",yanchor="bottom",y=1.02,xanchor="right",x=1))
+        fig.update_xaxes(type="log",showgrid=True,gridcolor="#E4DFD2",tickfont=dict(size=12))
+        fig.update_yaxes(showgrid=False,tickfont=dict(size=13,color=INK),ticksuffix="  ")
+        plot(fig,max(320,54+42*len(order)),"f01_muni_investment",margin=dict(l=16,r=64,t=28,b=18))
+        st.caption("Escala logarítmica: Vargas concentra mucha más inversión que el resto (más puntos registrados), así que una escala lineal dejaría las demás barras ilegibles.")
+        section_figures.setdefault("Inversión", []).append(fig)
     st.caption("Los montos son ilustrativos (datos históricos no incluían inversión). Cada barra se apila por foco de intervención (salud pública / establecimiento de salud). No se desglosa por parroquia porque ese dato real solo existe para 3 puntos de salud pública (todos en Vargas); los establecimientos de salud no lo declaran.")
 
     st.markdown('<div id="donantes-f01" class="section-kicker">09 · Fuentes de apoyo</div><h2>Fuentes declaradas por los socios</h2>',unsafe_allow_html=True)
@@ -1231,46 +1462,76 @@ if module.startswith("Registro"):
             section_figures.setdefault("Fuentes de apoyo", []).append(fig)
     st.caption("La visualización cuenta puntos en los que una organización declaró una fuente de apoyo. No representa montos ni atribuye financiamiento a un servicio específico.")
     st.caption(f"Datos actualizados al {last_f01}. La información refleja lo reportado por los socios del Clúster Salud y puede estar sujeta a cambios.")
-    st.markdown("### Descargar infografía personalizada")
-    export_options=["Resumen territorial","Calendarios","Presencia de socios","Paquetes de apoyo","Personal","Inversión","Fuentes de apoyo"]
-    selected_export=st.multiselect("Seleccione las secciones que desea incluir",export_options,default=["Resumen territorial","Calendarios","Paquetes de apoyo","Inversión"])
-    export_notes={"Resumen territorial":"El mapa F01 muestra el universo registrado y distingue los dos focos de intervención.","Calendarios":"La vigencia y la programación permiten consultar cuándo y dónde existe oferta.","Presencia de socios":"La presencia territorial indica cobertura reportada, no intensidad operativa.","Paquetes de apoyo":"La oferta se presenta por separado para establecimientos de salud y acciones de salud pública.","Personal":"El personal corresponde a disponibilidad reportada en puntos vigentes.","Inversión":"La inversión se agrega territorialmente para proteger la confidencialidad de las organizaciones.","Fuentes de apoyo":"Las fuentes declaradas no representan montos ni atribución a servicios específicos."}
-    export_figures=[fig for name in selected_export for fig in section_figures.get(name, [])]
+
+    st.markdown("### Enlaces de interés")
+    st.markdown(
+        '<div class="ext-links">'
+        '<a href="https://healthcluster.who.int/countries-and-regions/venezuela-(bolivarian-republic-of)" target="_blank">Clúster de Salud · Venezuela (Health Cluster)</a>'
+        '<a href="https://www.paho.org/en/paho-response-2026-venezuela-earthquakes" target="_blank">OPS/OMS · Respuesta a los terremotos en Venezuela 2026</a>'
+        '<a href="https://www.paho.org/es" target="_blank">OPS/OMS · Sitio oficial</a>'
+        '</div>',
+        unsafe_allow_html=True,
+    )
+
+    st.markdown("### Descargar infografía")
+    # Igual que el tablero anterior (cluster-salud-venezuela.streamlit.app):
+    # un solo botón que genera la infografía general con todas las gráficas
+    # del tablero, sin selector de secciones.
+    st.caption("Genera la infografía general con los datos y filtros actualmente aplicados en el tablero.")
+    export_items=[(name,fig) for name,figs in section_figures.items() for fig in figs]
+    export_signature=(tuple((a,str(b)) for a,b,_ in cards),len(export_items))
     # El PDF solo se genera cuando se pide explícitamente (no en cada rerun
     # de la página) porque exportar varias gráficas con kaleido es lento; sin
-    # este botón intermedio, cualquier clic en el tablero volvía a regenerar
-    # todo el PDF y hacía sentir la app lenta.
-    if st.button("Preparar infografía (PDF)", key="f01_prepare_pdf"):
-        with st.spinner("Generando infografía…"):
-            pdf,failed_charts=make_pdf(
-                "Registro de organizaciones e intervenciones · F01",
-                [(a,str(b)) for a,b,_ in cards],
-                [export_notes[x] for x in selected_export] or ["Resumen personalizado sin secciones adicionales."],
-                export_figures,
-            )
-        st.session_state["f01_pdf_bytes"]=pdf
-        if failed_charts:
-            st.warning(f"{failed_charts} gráfica(s) no pudieron incluirse en el PDF; el resto de la infografía se generó normalmente.")
-    if "f01_pdf_bytes" in st.session_state:
-        st.download_button("Descargar resumen F01 para impresión (PDF)",st.session_state["f01_pdf_bytes"],"infografia_F01.pdf","application/pdf")
+    # este paso, cualquier clic en el tablero volvería a regenerar todo el
+    # PDF y haría sentir la app lenta. Se guarda en session_state para no
+    # perderlo en reruns posteriores, y se invalida solo si cambian los
+    # datos filtrados — así el botón, con un solo texto y lugar en pantalla
+    # ("Descargar infografía general (PDF)"), pasa de disparar la
+    # generación a disparar la descarga real del navegador sin que aparezcan
+    # dos botones distintos a la vez.
+    if st.session_state.get("f01_pdf_signature")!=export_signature:
+        st.session_state.pop("f01_pdf_bytes",None)
+    pdf_slot=st.empty()
+    pdf_notes=[
+        "El mapa distingue los dos focos de intervención (establecimientos de salud y salud pública); el tamaño del punto representa la inversión registrada.",
+        "La oferta, el personal y la inversión se presentan por separado para establecimientos de salud y acciones de salud pública; no deben sumarse como una misma categoría.",
+        "Los datos corresponden a los filtros de Estado, Organización, Parroquia, Foco y período actualmente aplicados en el tablero.",
+    ]
+    if "f01_pdf_bytes" not in st.session_state:
+        if pdf_slot.button("Descargar infografía general (PDF)", key="f01_prepare_pdf", width="stretch"):
+            with st.spinner("Generando infografía…"):
+                pdf,failed_charts=make_pdf(
+                    "Registro de organizaciones e intervenciones · F01",
+                    [(a,str(b)) for a,b,_ in cards],
+                    pdf_notes,
+                    export_items,
+                )
+            st.session_state["f01_pdf_bytes"]=pdf
+            st.session_state["f01_pdf_signature"]=export_signature
+            if failed_charts:
+                st.warning(f"{failed_charts} gráfica(s) no pudieron incluirse en el PDF; el resto de la infografía se generó normalmente.")
+            pdf_slot.download_button("Descargar infografía general (PDF)",st.session_state["f01_pdf_bytes"],"infografia_F01.pdf","application/pdf",key="f01_download_pdf", width="stretch")
+    else:
+        pdf_slot.download_button("Descargar infografía general (PDF)",st.session_state["f01_pdf_bytes"],"infografia_F01.pdf","application/pdf",key="f01_download_pdf", width="stretch")
 else:
     section_figures: dict[str, list[go.Figure]] = {}
     r=filt(reports,True); ids=set(r.id_reporte); res=results[results.id_reporte.isin(ids)].copy(); active=r.sort_values("fecha_reporte").drop_duplicates(["organizacion","nombre_sitio"],keep="last")
     section_band("REPORTE DE ACCIONES", "¿Qué acciones reportan los socios, dónde se realizan y qué resultados registran?")
-    st.markdown('<div class="index"><a href="#mapa-f02">Mapa</a><a href="#reportantes-f02">Organizaciones que reportaron</a><a href="#focos-f02">Resumen de los Reportes</a><a href="#reportes-establecimientos-f02">Reportes de establecimientos de salud</a><a href="#reportes-acciones-f02">Reportes de acciones de salud pública</a><a href="#resultados-f02">Cobertura de reportes</a></div>',unsafe_allow_html=True)
+    st.markdown('<div class="index-label">Ir a la sección</div><div class="index"><a href="#mapa-f02">01 · Mapa</a><a href="#reportantes-f02">Organizaciones que reportaron</a><a href="#focos-f02">02 · Resumen de los Reportes</a><a href="#reportes-establecimientos-f02">03 · Reportes de establecimientos de salud</a><a href="#reportes-acciones-f02">04 · Reportes de acciones de salud pública</a><a href="#resultados-f02">05 · Cobertura de reportes</a></div>',unsafe_allow_html=True)
     # Suma solo indicadores en unidad "personas" de salud pública (no mezcla
     # con casos/procedimientos/kits); igual que el resto del tablero, es una
     # suma de indicadores y no representa personas únicas.
     people_reached=res.loc[res.foco.eq("Salud pública") & res.unidad.str.lower().eq("personas"),"total"].sum()
     cards=[
-        ("Estados",num(r.estado.nunique()),"con reportes periódicos"),
-        ("Municipios",num(r.municipio.nunique()),"con reportes periódicos"),
-        ("Parroquias",num(r.loc[r.parroquia.ne("No reportada"),"parroquia"].nunique()),"con dato disponible"),
-        ("Organizaciones reportantes",num(r.organizacion.nunique()),"socios que enviaron F02"),
-        ("Reportes periódicos",num(r.id_reporte.nunique()),"formularios recibidos"),
+        ("Estados",num(r.estado.nunique()),""),
+        ("Municipios",num(r.municipio.nunique()),""),
+        ("Parroquias",num(r.loc[r.parroquia.ne("No reportada"),"parroquia"].nunique()),""),
+        ("Organizaciones reportantes",num(r.organizacion.nunique()),""),
+        ("Reportes periódicos",num(r.id_reporte.nunique()),""),
         ("Personas atendidas en salud pública",num(people_reached),"suma de indicadores, no personas únicas"),
     ]
-    st.markdown('<div class="metric-row">'+''.join(metric(*x) for x in cards)+'</div>',unsafe_allow_html=True)
+    st.markdown('<h3>Panorama general de reportes periódicos</h3>',unsafe_allow_html=True)
+    st.markdown('<div class="metric-row" style="grid-template-columns:repeat(6,1fr)">'+''.join(metric(*x) for x in cards)+'</div>',unsafe_allow_html=True)
     st.markdown('<div id="mapa-f02" class="section-kicker">01 · Distribución territorial y georreferenciación</div><h2>Mapa de puntos con reporte periódico</h2>',unsafe_allow_html=True)
     point_reports=r.groupby(["organizacion","nombre_sitio"]).id_reporte.nunique().reset_index(name="reportes_punto")
     mapped=active.dropna(subset=["latitud","longitud"]).merge(point_reports,on=["organizacion","nombre_sitio"],how="left")
@@ -1311,11 +1572,14 @@ else:
         org_order_full=org_points_by_focus.groupby("organizacion").puntos.sum().sort_values(ascending=False).index.tolist()
 
         def _f02_org_bar(names: list, key: str):
-            rows=org_points_by_focus[org_points_by_focus.organizacion.isin(names)]
+            rows=org_points_by_focus[org_points_by_focus.organizacion.isin(names)].copy()
+            # Segmentos de 1-2 puntos no llevan número: a ese ancho el texto
+            # queda apretado contra el borde de la barra y se ve mal.
+            rows["etiqueta"]=rows.puntos.map(lambda v: str(v) if v>=3 else "")
             fig=px.bar(rows,x="puntos",y="organizacion",color="foco_formulario",orientation="h",barmode="stack",
                        category_orders={"organizacion":names},
                        color_discrete_map={"Acciones en el establecimiento de salud":RED,"Acciones de salud pública":YELLOW},
-                       text="puntos",labels={"puntos":"Puntos con reporte","organizacion":"","foco_formulario":"Foco"})
+                       text="etiqueta",labels={"puntos":"Puntos con reporte","organizacion":"","foco_formulario":"Foco"})
             fig.update_traces(textposition="inside",insidetextanchor="middle",textfont=dict(color="white",size=14),constraintext="none")
             fig.update_layout(bargap=.35,legend=dict(orientation="h",yanchor="bottom",y=1.02,xanchor="right",x=1))
             plot(fig,max(420,54*len(names)+90),key,margin=dict(l=4,r=54,t=52,b=18))
@@ -1374,11 +1638,24 @@ else:
         if subset.empty:
             st.info("No hay reportes para este foco con los filtros seleccionados.")
             return
-        monthly=subset.assign(mes=subset.fecha_reporte.dt.to_period("M").astype(str)).groupby("mes").id_reporte.nunique().reset_index(name="reportes")
-        fig=px.area(monthly,x="mes",y="reportes",markers=True,color_discrete_sequence=[color],labels={"mes":"Mes","reportes":"Reportes enviados"})
-        # type="category": si un foco solo tiene reportes en 1-2 meses,
+        # El período de reportes real (barra de fecha) suele cubrir pocas
+        # semanas, no varios meses: agrupar por mes colapsaba todo en un
+        # solo punto y la "evolución" se veía vacía. Se agrupa por semana
+        # cuando el rango cubierto es corto (<60 días) y por mes cuando es
+        # más largo, para que la tendencia siempre tenga varios puntos.
+        span_days=(subset.fecha_reporte.max()-subset.fecha_reporte.min()).days
+        if span_days<60:
+            period,period_label="W","Semana"
+            trend=subset.assign(bucket=subset.fecha_reporte.dt.to_period(period).apply(lambda p:p.start_time.strftime("%d/%m"))).groupby("bucket").id_reporte.nunique().reset_index(name="reportes")
+            trend=trend.rename(columns={"bucket":period_label})
+        else:
+            period,period_label="M","Mes"
+            trend=subset.assign(bucket=subset.fecha_reporte.dt.to_period(period).astype(str)).groupby("bucket").id_reporte.nunique().reset_index(name="reportes")
+            trend=trend.rename(columns={"bucket":period_label})
+        fig=px.area(trend,x=period_label,y="reportes",markers=True,color_discrete_sequence=[color],labels={period_label:period_label,"reportes":"Reportes enviados"})
+        # type="category": si un foco solo tiene reportes en 1-2 periodos,
         # Plotly interpretaba el eje como fecha continua y generaba ticks
-        # con hora/segundos en vez de mostrar el mes limpio.
+        # con hora/segundos en vez de mostrar el periodo limpio.
         fig.update_xaxes(type="category")
         plot(fig,320,f"f02_monthly_{suffix}")
         section_figures.setdefault(bucket, []).append(fig)
@@ -1388,14 +1665,27 @@ else:
         # Dona + cuadro multicolor (mismo lenguaje visual que F01), no
         # barras de un solo color.
         tipo_full=active[active.foco.eq(raw_name)].groupby("tipo_punto").nombre_sitio.nunique().reset_index(name="puntos")
-        org_full=subset.groupby("organizacion").id_reporte.nunique().reset_index(name="reportes")
+        # Antes contaba reportes (id_reporte.nunique() sobre "subset", sin
+        # deduplicar) mientras la dona de al lado cuenta puntos distintos
+        # ("active", deduplicado) — dos unidades distintas mostradas como si
+        # fueran comparables, por lo que la suma de esta gráfica no
+        # coincidía con el total de la dona. Se usa la misma base (puntos)
+        # para que ambas gráficas sumen lo mismo.
+        org_full=active[active.foco.eq(raw_name)].groupby("organizacion").nombre_sitio.nunique().reset_index(name="puntos")
+        # Desglose por tipo, para apilar la barra de organizaciones con los
+        # mismos colores que la dona de al lado (mismo tipo = mismo color en
+        # ambas gráficas).
+        org_type_full=active[active.foco.eq(raw_name)].groupby(["organizacion","tipo_punto"]).nombre_sitio.nunique().reset_index(name="puntos")
+        type_palette=[color,"#548FC5","#D97732","#6B9F70","#806CA5","#91A4B4","#3568B4","#C9A63C","#7F5539"]
+        type_order=sorted(tipo_full.tipo_punto.unique())
+        type_color_map=dict(zip(type_order,type_palette))
         type_left,org_right=st.columns([1.6,3.4],gap="small")
         with type_left:
             st.markdown(f"#### {tipo_titulo}")
             if tipo_full.empty: st.info("No hay puntos para este foco con los filtros seleccionados.")
             else:
                 fig=px.pie(tipo_full,names="tipo_punto",values="puntos",hole=.52,
-                           color_discrete_sequence=[color,"#548FC5","#D97732","#6B9F70","#806CA5","#91A4B4","#3568B4","#C9A63C","#7F5539"],
+                           color="tipo_punto",color_discrete_map=type_color_map,
                            labels={"tipo_punto":"Tipo de punto","puntos":"Puntos con reporte"})
                 fig.update_traces(textinfo="percent",textposition="inside",marker_line_color=PAPER,marker_line_width=3)
                 fig.update_layout(annotations=[dict(text=f"<b>{num(tipo_full.puntos.sum())}</b><br>puntos",x=.5,y=.5,showarrow=False,font=dict(size=15,color=INK))],
@@ -1403,19 +1693,39 @@ else:
                 plot(fig,560,f"f02_types_{suffix}",margin=dict(l=12,r=12,t=10,b=160))
                 section_figures.setdefault(bucket, []).append(fig)
         with org_right:
-            st.markdown("#### Organizaciones con más reportes")
+            st.markdown("#### Organizaciones con más puntos")
             if org_full.empty: st.info("No hay organizaciones para este foco con los filtros seleccionados.")
             else:
-                org_full["nombre_corto"]=org_full.organizacion.map(tile_name)
-                fig=px.treemap(org_full,path=["nombre_corto"],values="reportes",color="organizacion",custom_data=["organizacion"],
-                               color_discrete_sequence=["#3568B4","#9AC7F1","#E34D40","#EAA29A","#65AAA1","#9FE4AD","#F4D37D","#6E51AA","#E68A39"],
-                               labels={"organizacion":"Organización","reportes":"Reportes"})
-                fig.update_traces(hovertemplate="%{customdata[0]}<br>%{value} reportes<extra></extra>",marker_line_color=PAPER,marker_line_width=3)
-                set_org_tile_labels(fig)
-                fig.update_layout(showlegend=False)
-                plot(fig,590,f"rank_org_{suffix}",margin=dict(l=4,r=4,t=10,b=12))
-                section_figures.setdefault(bucket, []).append(fig)
-                st.caption("El tamaño de cada bloque representa el número de reportes enviados.")
+                # Antes era un treemap: con una organización muy dominante
+                # (p. ej. 26 puntos contra 3 y 1) el área proporcional
+                # dejaba a las demás como franjas ilegibles. Una barra
+                # horizontal se lee bien sin importar cuánta diferencia haya
+                # entre la más grande y las más chicas. Apilada por tipo de
+                # punto (mismo color que la dona) para ver, dentro de cada
+                # organización, qué tipos de establecimiento apoya.
+                org_sorted=org_full.sort_values("puntos",ascending=False)
+                top_org,rest_org=org_sorted.head(10),org_sorted.iloc[10:]
+                def _org_bar(rows,key,height):
+                    order=rows.organizacion.tolist()
+                    rows_typed=org_type_full[org_type_full.organizacion.isin(order)].copy()
+                    # Segmentos de 1-2 puntos no llevan número: a ese ancho
+                    # el texto queda apretado y varios se solapan entre sí.
+                    rows_typed["etiqueta"]=rows_typed.puntos.map(lambda v: str(v) if v>=3 else "")
+                    fig=px.bar(rows_typed,x="puntos",y="organizacion",orientation="h",color="tipo_punto",text="etiqueta",barmode="stack",
+                               color_discrete_map=type_color_map,category_orders={"organizacion":order,"tipo_punto":type_order},
+                               labels={"puntos":"Puntos con reporte","organizacion":"","tipo_punto":"Tipo de punto"})
+                    fig.update_traces(textposition="inside",insidetextanchor="middle",textfont=dict(color="white",size=11),constraintext="none")
+                    # Sin leyenda propia: los colores ya están explicados en
+                    # la leyenda de la dona de la izquierda (mismo mapeo
+                    # tipo→color) y repetirla acá era redundante.
+                    fig.update_layout(showlegend=False)
+                    plot(fig,height,key,margin=dict(l=4,r=24,t=12,b=18))
+                    section_figures.setdefault(bucket, []).append(fig)
+                _org_bar(top_org,f"rank_org_{suffix}",max(360,40*len(top_org)+90))
+                if not rest_org.empty:
+                    with st.expander(f"Ver las {len(rest_org)} organizaciones restantes"):
+                        _org_bar(rest_org,f"rank_org_rest_{suffix}",max(320,40*len(rest_org)+80))
+                st.caption("El largo de cada barra representa el número de puntos distintos con reporte en este foco (no reportes enviados); los colores coinciden con el tipo de punto de la gráfica de la izquierda.")
 
         rank_state=subset.groupby("estado").id_reporte.nunique().nlargest(8).sort_values(ascending=False).reset_index(name="reportes")
         rank_muni=subset.groupby(["estado","municipio"]).id_reporte.nunique().nlargest(10).sort_values(ascending=False).reset_index(name="reportes")
@@ -1437,6 +1747,128 @@ else:
                            category_orders={"territorio":rank_muni.territorio.tolist()},labels={"reportes":"Reportes","territorio":""})
                 fig.update_traces(textposition="outside"); plot(fig,max(320,44*len(rank_muni)+80),f"rank_muni_{suffix}")
                 section_figures.setdefault(bucket, []).append(fig)
+
+        st.markdown("#### Distribución geográfica de los reportes")
+        # Polígonos reales de municipio (límites oficiales, no puntos): la
+        # intensidad del color muestra dónde se concentran los reportes,
+        # igual que el ranking de municipios de arriba pero en el mapa.
+        muni_geo_reports=subset.groupby(["estado","municipio"]).id_reporte.nunique().reset_index(name="reportes")
+        if muni_geo_reports.empty:
+            st.info("No hay reportes con estado/municipio para este foco con los filtros seleccionados.")
+        else:
+            muni_geo_reports["join_key"]=muni_geo_reports.estado+" | "+muni_geo_reports.municipio
+            geo=load_municipio_geojson()
+            # Un choropleth normal solo dibuja el polígono de los municipios
+            # presentes en el DataFrame — los que no tienen reportes ni
+            # aparecían, así que no se veían separados del resto del mapa
+            # (mapa base sin borde). Se agregan TODOS los municipios de los
+            # estados relevantes (con 0 reportes si no tienen), para que
+            # cada municipio quede dibujado como su propio polígono con
+            # borde, tenga o no datos.
+            relevant_states=set(muni_geo_reports.estado)
+            all_muni=pd.DataFrame([
+                {"estado":f["properties"]["adm1_name"],"municipio":f["properties"]["adm2_name"],"join_key":f["properties"]["join_key"]}
+                for f in geo["features"] if f["properties"]["adm1_name"] in relevant_states
+            ]).drop_duplicates("join_key")
+            full_muni=all_muni.merge(muni_geo_reports[["join_key","reportes"]],on="join_key",how="left")
+            full_muni["reportes"]=full_muni.reportes.fillna(0)
+            # Un color distinto por municipio (no una escala de intensidad
+            # de un solo tono): así cada municipio se distingue a simple
+            # vista en el mapa. Los que no tienen reportes en este foco se
+            # agrupan en un gris neutro aparte para no ocupar un color de la
+            # paleta sin motivo.
+            muni_palette=[NAVY,RED,TEAL,YELLOW,BLUE,"#8A6FA8","#4C8C4A","#C9A63C","#E68A39","#65AAA1","#E34D40","#3568B4"]
+            reporting_munis=sorted(full_muni.loc[full_muni.reportes>0,"municipio"].unique())
+            muni_color_map={m:muni_palette[i%len(muni_palette)] for i,m in enumerate(reporting_munis)}
+            muni_color_map["Sin reportes"]="#E4E1D6"
+            full_muni["color_key"]=full_muni.municipio.where(full_muni.reportes>0,"Sin reportes")
+            fig=px.choropleth_map(full_muni,geojson=geo,locations="join_key",featureidkey="properties.join_key",
+                                   color="color_key",color_discrete_map=muni_color_map,
+                                   hover_name="municipio",hover_data={"estado":True,"reportes":True,"join_key":False,"color_key":False},
+                                   map_style="carto-positron",zoom=7.6,center={"lat":10.30,"lon":-66.98},opacity=.85,
+                                   labels={"color_key":"Municipio"})
+            fig.update_traces(marker_line_color="white",marker_line_width=1.2)
+            plot(fig,480,f"rank_map_{suffix}",is_map=True)
+            section_figures.setdefault(bucket, []).append(fig)
+            st.caption("Polígonos de municipio (límites oficiales); cada municipio tiene su propio color para distinguirlo a simple vista — pase el cursor sobre un polígono para ver su número de reportes. Los municipios sin reportes en este foco se muestran en gris.")
+
+        # Orden pedido: primero las áreas reportadas (4.1-style, "qué se
+        # reportó"), y luego el tipo de apoyo institucional reportado sobre
+        # esas áreas (3.11.x, "qué apoyo se dio") — antes iba al revés.
+        st.markdown("### Volumen reportado por área y unidad de medida")
+        if raw_name=="Salud pública":
+            area_subset=res[res.foco.eq(raw_name)]
+            areas=area_subset.groupby(["area","unidad"],as_index=False).total.sum()
+            if areas.empty:
+                st.info("No hay resultados para este foco con los filtros seleccionados.")
+            else:
+                # Menos áreas (6 en vez de 8) para que cada bloque quede más
+                # grande y legible; antes las más chicas eran franjas casi
+                # ilegibles.
+                top_areas=areas.groupby("area").total.sum().nlargest(6).index; areas=areas[areas.area.isin(top_areas)]
+                # Cuadro (treemap) en vez de barra apilada: la jerarquía
+                # área → unidad evita sumar cifras de distinta unidad en un
+                # mismo bloque (personas, casos, procedimientos, etc. quedan
+                # en sub-bloques separados dentro de cada área). Se muestra
+                # la unidad real siempre (antes se ocultaba "Personas" y
+                # quedaba un bloque anidado con solo una rayita "-", que se
+                # veía peor que repetir la palabra).
+                fig=px.treemap(areas,path=["area","unidad"],values="total",color="area",
+                               color_discrete_sequence=[NAVY,BLUE,TEAL,YELLOW,RED,"#8A6FA8","#4C8C4A","#C9A63C"])
+                fig.update_traces(texttemplate="<b>%{label}</b><br>%{value:,.0f}",textfont_size=14)
+                plot(fig,560,f"f02_areas_{suffix}",margin=dict(l=16,r=16,t=16,b=16))
+                section_figures.setdefault(bucket, []).append(fig)
+                st.caption("Las series separan personas, casos, procedimientos, kits, profesionales e instituciones; no deben sumarse como una misma unidad.")
+
+            # Segunda visualización: detalle por indicador real dentro de un
+            # área — cada área del F02 real (5.1, 5.2…) agrupa varios
+            # indicadores específicos (5.1.1, 5.1.2…), que el cuadro de
+            # arriba no puede mostrar sin amontonarse. Se elige un área y se
+            # ve su desglose real por indicador (dato 100% de resultados.csv,
+            # no simulado).
+            st.markdown("#### Detalle por indicador dentro de un área")
+            area_options=sorted(area_subset.area.unique()) if not area_subset.empty else []
+            if not area_options:
+                st.info("No hay áreas para mostrar el detalle.")
+            else:
+                selected_area=st.selectbox("Seleccione un área temática para ver el detalle",area_options,key=f"area_detail_{suffix}")
+                detail=area_subset[area_subset.area.eq(selected_area)].groupby(["indicador","unidad"],as_index=False).total.sum()
+                if detail.empty:
+                    st.info("No hay indicadores para esta área con los filtros seleccionados.")
+                else:
+                    detail["etiqueta"]=detail.indicador.str.replace(r"^Número de ","",regex=True).str.slice(0,70)
+                    order=detail.sort_values("total",ascending=False).etiqueta.tolist()
+                    fig=px.bar(detail,x="total",y="etiqueta",color="unidad",orientation="h",text_auto=",.0f",
+                               category_orders={"etiqueta":order},
+                               color_discrete_sequence=[NAVY,BLUE,TEAL,YELLOW,RED,"#8A6FA8"],
+                               labels={"total":"Total reportado","etiqueta":"","unidad":"Unidad"})
+                    fig.update_traces(textposition="outside",cliponaxis=False)
+                    fig.update_layout(legend=dict(orientation="h",yanchor="bottom",y=1.02,xanchor="right",x=1))
+                    plot(fig,max(360,34*len(detail)+90),f"f02_area_detail_{suffix}",margin=dict(l=4,r=54,t=44,b=18))
+                    section_figures.setdefault(bucket, []).append(fig)
+                    st.caption(f"Indicadores reales de F02 dentro de «{selected_area}» (resultados.csv); cada barra es un indicador específico del formulario, no un agregado del área.")
+        else:
+            # El histórico de reportes F02 (resultados.csv) nunca capturó la
+            # pregunta 4.1 ("áreas o servicios del establecimiento que
+            # recibieron apoyo") por período — solo existe a nivel de
+            # registro (F01, areas.csv), no de reporte. Autorizado
+            # explícitamente por la usuaria: se simula de forma
+            # determinística por reporte, usando el catálogo real
+            # compartido F01/F02, para representar cómo se vería este
+            # bloque del formulario con datos reales.
+            sim=subset[["id_reporte"]].drop_duplicates().copy()
+            if sim.empty:
+                st.info("No hay reportes para este foco con los filtros seleccionados.")
+            else:
+                area_seed=pd.util.hash_pandas_object(sim.id_reporte.astype(str),index=False).astype("uint64")
+                sim["area"]=[FACILITY_AREA_CATALOG[v % len(FACILITY_AREA_CATALOG)] for v in area_seed]
+                qty_seed=pd.util.hash_pandas_object((sim.id_reporte.astype(str)+"_qty"),index=False).astype("uint64")
+                sim["total"]=(qty_seed % 26 + 5)
+                areas=sim.groupby("area",as_index=False).total.sum().sort_values("total")
+                fig=px.bar(areas,x="total",y="area",orientation="h",text_auto=".2s",color_discrete_sequence=[RED],labels={"total":"Total reportado (simulado)","area":""})
+                fig.update_traces(textposition="outside"); plot(fig,max(420,32*len(areas)+120),f"f02_areas_{suffix}")
+                section_figures.setdefault(bucket, []).append(fig)
+                st.caption("Simulacro: el histórico de reportes F02 no capturó esta pregunta (4.1) por período — solo existe a nivel de registro (F01). Los valores se generan de forma determinística por reporte para representar cómo se vería este bloque con datos reales; no son un dato reportado.")
 
         if raw_name=="Establecimiento de salud":
             # Dato 100% real de F02 (resultados.csv, no F01): los únicos
@@ -1463,61 +1895,57 @@ else:
                 section_figures.setdefault(bucket, []).append(fig)
             st.caption("Indicadores reales de F02 sobre apoyo institucional (código 3.11.x); no existe un indicador equivalente para \"área o servicio apoyado\" (4.1) por período de reporte.")
 
-        st.markdown("### Volumen reportado por área y unidad de medida")
-        area_subset=res[res.foco.eq(raw_name)]
-        areas=area_subset.groupby(["area","unidad"],as_index=False).total.sum()
-        if areas.empty:
-            st.info("No hay resultados para este foco con los filtros seleccionados.")
-        else:
-            top_areas=areas.groupby("area").total.sum().nlargest(8).index; areas=areas[areas.area.isin(top_areas)]
-            if raw_name=="Salud pública":
-                # Cuadro (treemap) en vez de barra apilada: la jerarquía
-                # área → unidad evita sumar cifras de distinta unidad en un
-                # mismo bloque (personas, casos, procedimientos, etc. quedan
-                # en sub-bloques separados dentro de cada área).
-                fig=px.treemap(areas,path=["area","unidad"],values="total",color="area",
-                               color_discrete_sequence=[NAVY,BLUE,TEAL,YELLOW,RED,"#8A6FA8","#4C8C4A","#C9A63C"])
-                fig.update_traces(texttemplate="<b>%{label}</b><br>%{value:,.0f}",textfont_size=14)
-                plot(fig,540,f"f02_areas_{suffix}")
-                section_figures.setdefault(bucket, []).append(fig)
-            else:
-                fig=px.bar(areas,x="total",y="area",color="unidad",orientation="h",barmode="stack",text_auto=".2s",color_discrete_sequence=[NAVY,BLUE,TEAL,YELLOW,RED,"#8A6FA8"],labels={"total":"Total reportado","area":"","unidad":"Unidad"})
-                plot(fig,480,f"f02_areas_{suffix}")
-                section_figures.setdefault(bucket, []).append(fig)
-            st.caption("Las series separan personas, casos, procedimientos, kits, profesionales e instituciones; no deben sumarse como una misma unidad.")
-
         if include_population:
             st.markdown("### Composición por sexo, grupo de edad y discapacidad")
-            # Esta desagregación existe solo para salud pública: los
-            # indicadores de "Establecimiento de salud" del F02 no se
-            # reportan por sexo/edad (los datos que aparecían ahí antes
-            # correspondían a un cruce incorrecto, no a un dato real de ese
-            # foco), así que esta subsección no se repite del lado de
-            # establecimientos.
-            st.caption("Esta desagregación solo aplica a acciones de salud pública: los indicadores de establecimientos de salud del F02 no se reportan por sexo, edad ni discapacidad. Las cifras son sumas de indicadores y no representan personas únicas; la discapacidad se presenta aparte y no se adiciona nuevamente a mujeres, hombres, niñas o niños.")
             gender_labels={"mujeres":"Mujeres","hombres":"Hombres","ninas":"Niñas","ninos":"Niños"}
+            gender_colors={"Mujeres":RED,"Hombres":BLUE,"Niñas":YELLOW,"Niños":TEAL,"Discapacidad":"#7F5539"}
             people=res[res.foco.eq(raw_name) & res.unidad.str.lower().eq("personas") & res.tiene_desagregacion.eq(1)].copy()
             if people.empty:
                 st.info("No hay personas desagregadas para este foco con los filtros seleccionados.")
             else:
                 gender=people.groupby("area")[["mujeres","hombres","ninas","ninos"]].sum().reset_index().melt(id_vars="area",var_name="grupo",value_name="personas")
                 gender["grupo"]=gender.grupo.map(gender_labels)
-                top=gender.groupby("area").personas.sum().nlargest(6).index; gender_top=gender[gender.area.isin(top)]
                 totals_gender=gender.groupby("grupo",as_index=False).personas.sum()
+                disability_total=people.discapacidad.sum()
+                if disability_total>0:
+                    totals_gender=pd.concat([totals_gender,pd.DataFrame([{"grupo":"Discapacidad","personas":disability_total}])],ignore_index=True)
                 gp_l,gp_r=st.columns(2)
                 with gp_l:
-                    fig=px.pie(totals_gender,names="grupo",values="personas",hole=.6,color="grupo",color_discrete_map={"Mujeres":RED,"Hombres":BLUE,"Niñas":YELLOW,"Niños":TEAL})
-                    fig.update_traces(textinfo="percent+label"); plot(fig,420,f"gender_donut_{suffix}")
+                    fig=px.pie(totals_gender,names="grupo",values="personas",hole=.6,color="grupo",color_discrete_map=gender_colors)
+                    fig.update_traces(textinfo="percent+label")
+                    plot(fig,420,f"gender_donut_{suffix}")
                     section_figures.setdefault(bucket, []).append(fig)
                 with gp_r:
-                    fig=px.bar(gender_top,x="personas",y="area",color="grupo",orientation="h",barmode="stack",color_discrete_map={"Mujeres":RED,"Hombres":BLUE,"Niñas":YELLOW,"Niños":TEAL},labels={"personas":"Personas","area":""})
-                    plot(fig,420,f"gender_stack_{suffix}")
-                    section_figures.setdefault(bucket, []).append(fig)
-                disability=people.groupby("area").discapacidad.sum().sort_values(ascending=False).head(6).sort_values().reset_index(name="personas")
-                if disability.personas.sum() > 0:
-                    st.markdown("#### Personas con discapacidad por acción")
-                    fig=px.bar(disability,x="personas",y="area",orientation="h",text="personas",color_discrete_sequence=[NAVY],labels={"personas":"Personas con discapacidad","area":""}); fig.update_traces(textposition="outside"); plot(fig,340,f"disability_{suffix}")
-                    section_figures.setdefault(bucket, []).append(fig)
+                    # Filtro en vez de selección por clic en la dona (el
+                    # clic no disparaba el rerun de forma confiable): elige
+                    # qué grupo mostrar en esta misma gráfica de áreas.
+                    group_options=["Todos"]+totals_gender.grupo.tolist()
+                    selected_group=st.selectbox("Filtrar por grupo",group_options,key=f"gender_filter_{suffix}")
+                    if selected_group=="Todos":
+                        top=gender.groupby("area").personas.sum().nlargest(6).index; gender_top=gender[gender.area.isin(top)]
+                        fig=px.bar(gender_top,x="personas",y="area",color="grupo",orientation="h",barmode="stack",category_orders={"area":top.tolist()},color_discrete_map=gender_colors,labels={"personas":"Personas","area":"","grupo":""})
+                        # Sin leyenda propia: ya está la de la dona a la
+                        # izquierda con los mismos colores por grupo.
+                        fig.update_layout(showlegend=False)
+                        plot(fig,420,f"gender_stack_{suffix}",margin=dict(l=4,r=24,t=12,b=18))
+                        section_figures.setdefault(bucket, []).append(fig)
+                    elif selected_group=="Discapacidad":
+                        disability=people.groupby("area").discapacidad.sum().sort_values(ascending=False).head(6).sort_values().reset_index(name="personas")
+                        if disability.personas.sum()==0:
+                            st.info("No hay personas con discapacidad reportadas para estos filtros.")
+                        else:
+                            fig=px.bar(disability,x="personas",y="area",orientation="h",text="personas",color_discrete_sequence=[gender_colors["Discapacidad"]],labels={"personas":"Personas con discapacidad","area":""}); fig.update_traces(textposition="outside")
+                            plot(fig,420,f"disability_{suffix}",margin=dict(l=4,r=24,t=12,b=18))
+                            section_figures.setdefault(bucket, []).append(fig)
+                    else:
+                        col={"Mujeres":"mujeres","Hombres":"hombres","Niñas":"ninas","Niños":"ninos"}[selected_group]
+                        top_group=people.groupby("area")[col].sum().sort_values(ascending=False).head(6).sort_values().reset_index(name="personas")
+                        if top_group.personas.sum()==0:
+                            st.info(f"No hay personas reportadas en «{selected_group}» para estos filtros.")
+                        else:
+                            fig=px.bar(top_group,x="personas",y="area",orientation="h",text="personas",color_discrete_sequence=[gender_colors[selected_group]],labels={"personas":f"Personas ({selected_group.lower()})","area":""}); fig.update_traces(textposition="outside")
+                            plot(fig,420,f"gender_detail_{suffix}",margin=dict(l=4,r=24,t=12,b=18))
+                            section_figures.setdefault(bucket, []).append(fig)
 
     st.markdown('<div id="reportes-establecimientos-f02" class="section-rule"></div><div class="section-kicker">03 · Reportes de establecimientos de salud</div><h2>Evolución y alcance de los reportes de establecimientos de salud</h2>',unsafe_allow_html=True)
     _render_focus_reports("Acciones en el establecimiento de salud", "Establecimiento de salud", RED, "est", "Tipos de establecimiento de salud", "Reportes de establecimientos de salud")
@@ -1549,24 +1977,34 @@ else:
             fig.update_traces(textposition="outside"); plot(fig,440,key)
             section_figures.setdefault("Rankings de reporte", []).append(fig)
     st.caption("Cada barra puede combinar distintas unidades de medida (personas, casos, procedimientos, kits, etc.); compare solo indicadores con la misma unidad.")
-    st.markdown("### Descargar infografía personalizada")
-    export_options=["Resumen territorial","Resumen de los Reportes","Reportes de establecimientos de salud","Reportes de acciones de salud pública","Rankings de reporte"]
-    selected_export=st.multiselect("Seleccione las secciones que desea incluir",export_options,default=["Resumen territorial","Reportes de establecimientos de salud","Reportes de acciones de salud pública"])
-    export_notes={"Resumen territorial":"El mapa F02 incluye únicamente puntos con actividad reportada.","Resumen de los Reportes":"Los reportes y los puntos se presentan por separado para los dos focos.","Reportes de establecimientos de salud":"Incluye tendencia mensual, rankings, tipos de punto y resultados por unidad para este foco.","Reportes de acciones de salud pública":"Incluye tendencia mensual, rankings, tipos de lugar, resultados por unidad y población alcanzada para este foco.","Rankings de reporte":"Los rankings muestran frecuencia de reporte, no intensidad ni calidad de la respuesta."}
-    export_figures=[fig for name in selected_export for fig in section_figures.get(name, [])]
-    if st.button("Preparar infografía (PDF)", key="f02_prepare_pdf"):
-        with st.spinner("Generando infografía…"):
-            pdf,failed_charts=make_pdf(
-                "Reportes periódicos · F02",
-                [(a,str(b)) for a,b,_ in cards],
-                [export_notes[x] for x in selected_export] or ["Resumen personalizado sin secciones adicionales."],
-                export_figures,
-            )
-        st.session_state["f02_pdf_bytes"]=pdf
-        if failed_charts:
-            st.warning(f"{failed_charts} gráfica(s) no pudieron incluirse en el PDF; el resto de la infografía se generó normalmente.")
-    if "f02_pdf_bytes" in st.session_state:
-        st.download_button("Descargar resumen F02 para impresión (PDF)",st.session_state["f02_pdf_bytes"],"infografia_F02.pdf","application/pdf")
+    st.markdown("### Descargar infografía")
+    st.caption("Genera la infografía general con los datos y filtros actualmente aplicados en el tablero.")
+    export_items=[(name,fig) for name,figs in section_figures.items() for fig in figs]
+    export_signature=(tuple((a,str(b)) for a,b,_ in cards),len(export_items))
+    if st.session_state.get("f02_pdf_signature")!=export_signature:
+        st.session_state.pop("f02_pdf_bytes",None)
+    pdf_slot=st.empty()
+    pdf_notes=[
+        "El mapa incluye únicamente puntos con actividad reportada en el período seleccionado.",
+        "Los reportes y resultados se presentan por separado para establecimientos de salud y acciones de salud pública; no deben sumarse como una misma categoría.",
+        "Los rankings muestran frecuencia de reporte, no intensidad ni calidad de la respuesta.",
+    ]
+    if "f02_pdf_bytes" not in st.session_state:
+        if pdf_slot.button("Descargar infografía general (PDF)", key="f02_prepare_pdf", width="stretch"):
+            with st.spinner("Generando infografía…"):
+                pdf,failed_charts=make_pdf(
+                    "Reportes periódicos · F02",
+                    [(a,str(b)) for a,b,_ in cards],
+                    pdf_notes,
+                    export_items,
+                )
+            st.session_state["f02_pdf_bytes"]=pdf
+            st.session_state["f02_pdf_signature"]=export_signature
+            if failed_charts:
+                st.warning(f"{failed_charts} gráfica(s) no pudieron incluirse en el PDF; el resto de la infografía se generó normalmente.")
+            pdf_slot.download_button("Descargar infografía general (PDF)",st.session_state["f02_pdf_bytes"],"infografia_F02.pdf","application/pdf",key="f02_download_pdf", width="stretch")
+    else:
+        pdf_slot.download_button("Descargar infografía general (PDF)",st.session_state["f02_pdf_bytes"],"infografia_F02.pdf","application/pdf",key="f02_download_pdf", width="stretch")
 
 st.divider()
 st.caption("Simulacro metodológico · Datos históricos sanitizados y muestras piloto · La versión productiva deberá conectarse directamente con las exportaciones de los nuevos F01 y F02.")
