@@ -12,6 +12,7 @@ import math
 import re
 import sys
 import tempfile
+import textwrap
 import unicodedata
 from datetime import timedelta
 from pathlib import Path
@@ -999,15 +1000,12 @@ if module.startswith("Registro"):
     facility_types=facility_points.groupby("tipo_punto").id_punto.nunique().reset_index(name="puntos")
     facility_orgs=facility_points.groupby("organizacion").id_punto.nunique().reset_index(name="puntos")
     def tile_name(name: str) -> str:
-        if name.startswith("Médicos Sin Fronteras"): return "MSF"
-        if name.startswith("Médicos del Mundo"): return "MdM"
-        if name.startswith("Proyecto Esperanza"): return "Esperanza"
-        if name.startswith("OIM -"): return "OIM"
-        if name.startswith("OPS/OMS -"): return "OPS/OMS"
-        return name if len(name)<=20 else name[:19].rstrip()+"…"
+        # Conservar el nombre completo: los saltos de línea permiten leerlo
+        # también en los bloques pequeños sin recurrir a siglas nuevas.
+        return "<br>".join(textwrap.wrap(name, width=18, break_long_words=False))
 
     # Más espacio para los nombres de socios; la dona conserva su leyenda.
-    facility_left,facility_right=st.columns([2,3],gap="small")
+    facility_left,facility_right=st.columns([1.4,3.6],gap="small")
     with facility_left:
         st.markdown("#### Tipo de establecimiento de salud")
         if facility_types.empty: st.info("No hay establecimientos para los filtros seleccionados.")
@@ -1028,13 +1026,13 @@ if module.startswith("Registro"):
             fig=px.treemap(facility_orgs,path=["nombre_corto"],values="puntos",color="organizacion",custom_data=["organizacion"],
                            color_discrete_sequence=["#3568B4","#9AC7F1","#E34D40","#EAA29A","#65AAA1","#9FE4AD","#F4D37D","#6E51AA","#E68A39"],
                            labels={"organizacion":"Organización","puntos":"Establecimientos"})
-            fig.update_traces(texttemplate="%{label}<br>%{value}",textfont_size=16,
+            fig.update_traces(texttemplate="%{label}<br>%{value}",textfont_size=17,
                               hovertemplate="%{customdata[0]}<br>%{value} establecimientos<extra></extra>",
                               marker_line_color=PAPER,marker_line_width=3)
-            fig.update_layout(showlegend=False,uniformtext=dict(minsize=16,mode="hide"))
-            plot(fig,590,"facility_orgs_treemap",margin=dict(l=4,r=4,t=10,b=12))
+            fig.update_layout(showlegend=False)
+            plot(fig,650,"facility_orgs_treemap",margin=dict(l=4,r=4,t=10,b=12))
             section_figures.setdefault("Presencia de socios", []).append(fig)
-            st.caption("MSF: Médicos Sin Fronteras · MdM: Médicos del Mundo · Esperanza: Proyecto Esperanza. Pase el cursor sobre un bloque para ver el nombre completo.")
+            st.caption("El tamaño de cada bloque representa el número de establecimientos apoyados.")
 
     st.markdown("#### Áreas o servicios del establecimiento que reciben apoyo")
     fs=filt(d["facility_services_joined"]); ft=fs.servicio.value_counts().head(10).reset_index(); ft.columns=["servicio","puntos"]; ft["foco"]="Establecimiento de salud"
@@ -1062,7 +1060,7 @@ if module.startswith("Registro"):
     public_points_for_charts=p[p.foco.eq("Salud pública")]
     public_types=public_points_for_charts.groupby("tipo_punto").id_punto.nunique().reset_index(name="puntos")
     public_orgs=public_points_for_charts.groupby("organizacion").id_punto.nunique().reset_index(name="puntos")
-    public_left,public_right=st.columns([2.25,2.75],gap="small")
+    public_left,public_right=st.columns([1.6,3.4],gap="small")
     with public_left:
         st.markdown("#### Tipo de lugar de intervención")
         if public_types.empty: st.info("No hay lugares de intervención para los filtros seleccionados.")
@@ -1096,13 +1094,13 @@ if module.startswith("Registro"):
             fig=px.treemap(public_orgs,path=["nombre_corto"],values="puntos",color="organizacion",custom_data=["organizacion"],
                            color_discrete_sequence=["#3568B4","#9AC7F1","#E34D40","#EAA29A","#65AAA1","#9FE4AD","#F4D37D","#6E51AA","#E68A39"],
                            labels={"organizacion":"Organización","puntos":"Lugares"})
-            fig.update_traces(texttemplate="%{label}<br>%{value}",textfont_size=16,
+            fig.update_traces(texttemplate="%{label}<br>%{value}",textfont_size=17,
                               hovertemplate="%{customdata[0]}<br>%{value} lugares<extra></extra>",
                               marker_line_color=PAPER,marker_line_width=3)
-            fig.update_layout(showlegend=False,uniformtext=dict(minsize=16,mode="hide"))
-            plot(fig,590,"public_orgs_treemap",margin=dict(l=4,r=4,t=10,b=12))
+            fig.update_layout(showlegend=False)
+            plot(fig,650,"public_orgs_treemap",margin=dict(l=4,r=4,t=10,b=12))
             section_figures.setdefault("Presencia de socios", []).append(fig)
-            st.caption("MSF: Médicos Sin Fronteras · MdM: Médicos del Mundo · Esperanza: Proyecto Esperanza. Pase el cursor sobre un bloque para ver el nombre completo.")
+            st.caption("El tamaño de cada bloque representa el número de lugares de intervención.")
 
     po=filt(d["offered_joined"]); pt=po.servicio.value_counts().head(10).reset_index(); pt.columns=["servicio","puntos"]; pt["foco"]="Salud pública"
     st.markdown("#### Áreas temáticas de acciones de salud pública")
