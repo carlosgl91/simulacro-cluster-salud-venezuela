@@ -1062,18 +1062,31 @@ if module.startswith("Registro"):
     public_points_for_charts=p[p.foco.eq("Salud pública")]
     public_types=public_points_for_charts.groupby("tipo_punto").id_punto.nunique().reset_index(name="puntos")
     public_orgs=public_points_for_charts.groupby("organizacion").id_punto.nunique().reset_index(name="puntos")
-    public_left,public_right=st.columns([2,3],gap="small")
+    public_left,public_right=st.columns([2.25,2.75],gap="small")
     with public_left:
         st.markdown("#### Tipo de lugar de intervención")
         if public_types.empty: st.info("No hay lugares de intervención para los filtros seleccionados.")
         else:
-            fig=px.pie(public_types,names="tipo_punto",values="puntos",hole=.52,
-                       color_discrete_sequence=[YELLOW,"#F0D987","#C89431","#F5E5AD","#A87A29","#DDAF4B","#806226","#EBC96A","#B7A271"],
-                       labels={"tipo_punto":"Tipo de lugar","puntos":"Lugares"})
-            fig.update_traces(textinfo="percent",textposition="inside",marker_line_color=PAPER,marker_line_width=3)
-            fig.update_layout(annotations=[dict(text=f"<b>{num(public_types.puntos.sum())}</b><br>lugares",x=.5,y=.5,showarrow=False,font=dict(size=15,color=INK))],
-                              legend=dict(orientation="h",yanchor="top",y=-.06,xanchor="center",x=.5,font=dict(size=11)))
-            plot(fig,520,"public_type_donut",margin=dict(l=12,r=12,t=10,b=115))
+            type_labels={
+                "Alojamiento temporal / Albergue":"Albergue",
+                "Escuela / Institución educativa":"Escuela / institución",
+                "Brigada móvil / Punto móvil de atención":"Brigada / punto móvil",
+                "Otro (especificar)":"Otro",
+            }
+            public_types=public_types.sort_values("puntos")
+            public_types["tipo_corto"]=public_types.tipo_punto.map(lambda name:type_labels.get(name,name))
+            total_lugares=public_types.puntos.sum()
+            public_types["etiqueta"]=public_types.puntos.map(lambda value:f"{value} · {value/total_lugares:.1%}")
+            st.caption(f"{num(total_lugares)} lugares registrados · cada barra identifica directamente el tipo de lugar.")
+            fig=px.bar(public_types,x="puntos",y="tipo_corto",orientation="h",text="etiqueta",
+                       custom_data=["tipo_punto"],color_discrete_sequence=[YELLOW],
+                       labels={"puntos":"Lugares de intervención","tipo_corto":""})
+            fig.update_traces(textposition="outside",textfont=dict(size=13,color=INK),
+                              marker_line_color=INK,marker_line_width=.7,
+                              hovertemplate="%{customdata[0]}<br>%{x} lugares<extra></extra>")
+            fig.update_layout(showlegend=False,bargap=.36)
+            fig.update_xaxes(range=[0,public_types.puntos.max()*1.52],showgrid=True,gridcolor="#E4DFD2")
+            plot(fig,550,"public_type_bars",margin=dict(l=178,r=66,t=8,b=44))
             section_figures.setdefault("Presencia de socios", []).append(fig)
     with public_right:
         st.markdown("#### Organizaciones con acciones de salud pública")
