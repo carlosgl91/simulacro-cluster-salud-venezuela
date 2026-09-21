@@ -992,7 +992,8 @@ if module.startswith("Registro"):
     facility_points=p[p.foco.eq("Establecimiento de salud")]
     facility_types=facility_points.groupby("tipo_punto").id_punto.nunique().reset_index(name="puntos")
     facility_orgs=facility_points.groupby("organizacion").id_punto.nunique().reset_index(name="puntos")
-    facility_left,facility_right=st.columns(2,gap="large")
+    # Más espacio para los nombres de socios; la dona conserva su leyenda.
+    facility_left,facility_right=st.columns([2,3],gap="small")
     with facility_left:
         st.markdown("#### Tipo de establecimiento de salud")
         if facility_types.empty: st.info("No hay establecimientos para los filtros seleccionados.")
@@ -1009,13 +1010,15 @@ if module.startswith("Registro"):
         st.markdown("#### Organizaciones que apoyan establecimientos de salud")
         if facility_orgs.empty: st.info("No hay organizaciones para los filtros seleccionados.")
         else:
-            fig=px.treemap(facility_orgs,path=["organizacion"],values="puntos",color="organizacion",
+            facility_orgs["nombre_corto"]=facility_orgs.organizacion.map(lambda name: "OIM" if name.startswith("OIM -") else ("OPS/OMS" if name.startswith("OPS/OMS -") else (name if len(name)<=23 else name[:22].rstrip()+"…")))
+            fig=px.treemap(facility_orgs,path=["nombre_corto"],values="puntos",color="organizacion",custom_data=["organizacion"],
                            color_discrete_sequence=["#3568B4","#9AC7F1","#E34D40","#EAA29A","#65AAA1","#9FE4AD","#F4D37D","#6E51AA","#E68A39"],
                            labels={"organizacion":"Organización","puntos":"Establecimientos"})
-            fig.update_traces(texttemplate="<b>%{label}</b><br>%{value} establecimientos",textfont_size=13,
+            fig.update_traces(texttemplate="<b>%{label}</b><br>%{value}",textfont_size=18,
+                              hovertemplate="%{customdata[0]}<br>%{value} establecimientos<extra></extra>",
                               marker_line_color=PAPER,marker_line_width=3)
             fig.update_layout(showlegend=False)
-            plot(fig,520,"facility_orgs_treemap",margin=dict(l=4,r=4,t=10,b=12))
+            plot(fig,590,"facility_orgs_treemap",margin=dict(l=4,r=4,t=10,b=12))
             section_figures.setdefault("Presencia de socios", []).append(fig)
 
     st.markdown("#### Áreas o servicios del establecimiento que reciben apoyo")
@@ -1044,7 +1047,7 @@ if module.startswith("Registro"):
     public_points_for_charts=p[p.foco.eq("Salud pública")]
     public_types=public_points_for_charts.groupby("tipo_punto").id_punto.nunique().reset_index(name="puntos")
     public_orgs=public_points_for_charts.groupby("organizacion").id_punto.nunique().reset_index(name="puntos")
-    public_left,public_right=st.columns(2,gap="large")
+    public_left,public_right=st.columns([2,3],gap="small")
     with public_left:
         st.markdown("#### Tipo de lugar de intervención")
         if public_types.empty: st.info("No hay lugares de intervención para los filtros seleccionados.")
@@ -1061,13 +1064,15 @@ if module.startswith("Registro"):
         st.markdown("#### Organizaciones con acciones de salud pública")
         if public_orgs.empty: st.info("No hay organizaciones para los filtros seleccionados.")
         else:
-            fig=px.treemap(public_orgs,path=["organizacion"],values="puntos",color="organizacion",
+            public_orgs["nombre_corto"]=public_orgs.organizacion.map(lambda name: "OIM" if name.startswith("OIM -") else ("OPS/OMS" if name.startswith("OPS/OMS -") else (name if len(name)<=23 else name[:22].rstrip()+"…")))
+            fig=px.treemap(public_orgs,path=["nombre_corto"],values="puntos",color="organizacion",custom_data=["organizacion"],
                            color_discrete_sequence=["#3568B4","#9AC7F1","#E34D40","#EAA29A","#65AAA1","#9FE4AD","#F4D37D","#6E51AA","#E68A39"],
                            labels={"organizacion":"Organización","puntos":"Lugares"})
-            fig.update_traces(texttemplate="<b>%{label}</b><br>%{value} lugares",textfont_size=13,
+            fig.update_traces(texttemplate="<b>%{label}</b><br>%{value}",textfont_size=18,
+                              hovertemplate="%{customdata[0]}<br>%{value} lugares<extra></extra>",
                               marker_line_color=PAPER,marker_line_width=3)
             fig.update_layout(showlegend=False)
-            plot(fig,520,"public_orgs_treemap",margin=dict(l=4,r=4,t=10,b=12))
+            plot(fig,590,"public_orgs_treemap",margin=dict(l=4,r=4,t=10,b=12))
             section_figures.setdefault("Presencia de socios", []).append(fig)
 
     po=filt(d["offered_joined"]); pt=po.servicio.value_counts().head(10).reset_index(); pt.columns=["servicio","puntos"]; pt["foco"]="Salud pública"
