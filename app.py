@@ -1016,20 +1016,15 @@ if module.startswith("Registro"):
         st.markdown("#### Organizaciones que apoyan establecimientos de salud")
         if facility_orgs.empty: st.info("No hay organizaciones para los filtros seleccionados.")
         else:
-            # Ranking editorial: conserva la magnitud relativa sin dejar un
-            # rectángulo dominante casi vacío ni reducir los nombres chicos.
-            facility_orgs=facility_orgs.sort_values("puntos")
-            facility_orgs["nombre_corto"]=facility_orgs.organizacion.map(lambda name: "OIM" if name.startswith("OIM -") else ("OPS/OMS" if name.startswith("OPS/OMS -") else (name if len(name)<=29 else name[:28].rstrip()+"…")))
-            facility_orgs["etiqueta"]=facility_orgs.puntos.map(lambda value:f"{value}  ·  {value/facility_orgs.puntos.sum():.0%}")
-            fig=px.bar(facility_orgs,x="puntos",y="nombre_corto",orientation="h",text="etiqueta",
-                       custom_data=["organizacion"],color_discrete_sequence=[RED],
-                       labels={"puntos":"Establecimientos apoyados","nombre_corto":""})
-            fig.update_traces(textposition="outside",textfont=dict(size=14,color=INK),
-                              hovertemplate="%{customdata[0]}<br>%{x} establecimientos<extra></extra>")
-            fig.update_layout(showlegend=False,bargap=.42)
-            fig.update_xaxes(range=[0,facility_orgs.puntos.max()*1.35],showgrid=True,gridcolor="#E4DFD2")
-            fig.update_yaxes(automargin=True,tickfont=dict(size=14,color=INK))
-            plot(fig,max(500,48*len(facility_orgs)+90),"facility_orgs_ranking",margin=dict(l=175,r=70,t=10,b=45))
+            facility_orgs["nombre_corto"]=facility_orgs.organizacion.map(lambda name: "OIM" if name.startswith("OIM -") else ("OPS/OMS" if name.startswith("OPS/OMS -") else (name if len(name)<=23 else name[:22].rstrip()+"…")))
+            fig=px.treemap(facility_orgs,path=["nombre_corto"],values="puntos",color="organizacion",custom_data=["organizacion"],
+                           color_discrete_sequence=["#3568B4","#9AC7F1","#E34D40","#EAA29A","#65AAA1","#9FE4AD","#F4D37D","#6E51AA","#E68A39"],
+                           labels={"organizacion":"Organización","puntos":"Establecimientos"})
+            fig.update_traces(texttemplate="%{label}<br>%{value}",textfont_size=16,
+                              hovertemplate="%{customdata[0]}<br>%{value} establecimientos<extra></extra>",
+                              marker_line_color=PAPER,marker_line_width=3)
+            fig.update_layout(showlegend=False)
+            plot(fig,590,"facility_orgs_treemap",margin=dict(l=4,r=4,t=10,b=12))
             section_figures.setdefault("Presencia de socios", []).append(fig)
 
     st.markdown("#### Áreas o servicios del establecimiento que reciben apoyo")
@@ -1075,18 +1070,15 @@ if module.startswith("Registro"):
         st.markdown("#### Organizaciones con acciones de salud pública")
         if public_orgs.empty: st.info("No hay organizaciones para los filtros seleccionados.")
         else:
-            public_orgs=public_orgs.sort_values("puntos")
-            public_orgs["nombre_corto"]=public_orgs.organizacion.map(lambda name: "OIM" if name.startswith("OIM -") else ("OPS/OMS" if name.startswith("OPS/OMS -") else (name if len(name)<=29 else name[:28].rstrip()+"…")))
-            public_orgs["etiqueta"]=public_orgs.puntos.map(lambda value:f"{value}  ·  {value/public_orgs.puntos.sum():.0%}")
-            fig=px.bar(public_orgs,x="puntos",y="nombre_corto",orientation="h",text="etiqueta",
-                       custom_data=["organizacion"],color_discrete_sequence=[YELLOW],
-                       labels={"puntos":"Lugares de intervención","nombre_corto":""})
-            fig.update_traces(textposition="outside",textfont=dict(size=14,color=INK),
-                              hovertemplate="%{customdata[0]}<br>%{x} lugares<extra></extra>")
-            fig.update_layout(showlegend=False,bargap=.42)
-            fig.update_xaxes(range=[0,public_orgs.puntos.max()*1.35],showgrid=True,gridcolor="#E4DFD2")
-            fig.update_yaxes(automargin=True,tickfont=dict(size=14,color=INK))
-            plot(fig,max(500,48*len(public_orgs)+90),"public_orgs_ranking",margin=dict(l=175,r=70,t=10,b=45))
+            public_orgs["nombre_corto"]=public_orgs.organizacion.map(lambda name: "OIM" if name.startswith("OIM -") else ("OPS/OMS" if name.startswith("OPS/OMS -") else (name if len(name)<=23 else name[:22].rstrip()+"…")))
+            fig=px.treemap(public_orgs,path=["nombre_corto"],values="puntos",color="organizacion",custom_data=["organizacion"],
+                           color_discrete_sequence=["#3568B4","#9AC7F1","#E34D40","#EAA29A","#65AAA1","#9FE4AD","#F4D37D","#6E51AA","#E68A39"],
+                           labels={"organizacion":"Organización","puntos":"Lugares"})
+            fig.update_traces(texttemplate="%{label}<br>%{value}",textfont_size=16,
+                              hovertemplate="%{customdata[0]}<br>%{value} lugares<extra></extra>",
+                              marker_line_color=PAPER,marker_line_width=3)
+            fig.update_layout(showlegend=False)
+            plot(fig,590,"public_orgs_treemap",margin=dict(l=4,r=4,t=10,b=12))
             section_figures.setdefault("Presencia de socios", []).append(fig)
 
     po=filt(d["offered_joined"]); pt=po.servicio.value_counts().head(10).reset_index(); pt.columns=["servicio","puntos"]; pt["foco"]="Salud pública"
