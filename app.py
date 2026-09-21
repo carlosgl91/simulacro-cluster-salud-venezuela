@@ -334,7 +334,8 @@ def plot(fig: go.Figure, height: int = 420, key: str | None = None, margin: dict
     # recorten contra el borde de la figura (cliponaxis=False evita que
     # Plotly las corte incluso cuando quedan cerca del máximo del eje).
     fig.update_traces(selector=dict(type="bar"), cliponaxis=False)
-    fig.update_traces(selector=dict(type="treemap"), textfont=dict(size=13))
+    # Las etiquetas de cada treemap conservan el tamaño específico de su
+    # sección; sobrescribirlo aquí las reducía incluso después de ajustarlas.
     fig.update_traces(selector=dict(type="pie"), textfont=dict(size=13))
     fig.update_layout(height=height, margin=margin or (dict(l=0, r=0, t=0, b=44) if is_map else dict(l=16, r=54, t=52, b=18)), paper_bgcolor=PAPER,
                       plot_bgcolor=PAPER, font=dict(family="Arial", color=INK, size=13),
@@ -494,7 +495,12 @@ st.markdown(f"""
   .section-kicker{{color:{RED};text-transform:uppercase;letter-spacing:.11em;font-size:.7rem;font-weight:800;margin-top:22px}}
   .section-rule{{border-top:1px solid #C8C1B4;margin:24px 0 8px}}
   [data-testid="stRadio"] label p{{color:{INK}!important;font-weight:700}}
-  h2,h3{{color:{NAVY}}}.stTabs [data-baseweb="tab-list"]{{gap:1.2rem;border-bottom:1px solid #AEBBC5}}
+  h2,h3{{color:{NAVY}}}
+  .block-container h2{{font-size:1.9rem!important;line-height:1.23;font-weight:650}}
+  .block-container h3{{font-size:1.45rem!important;line-height:1.28;font-weight:650}}
+  .block-container h4{{font-size:1.16rem!important;line-height:1.3;font-weight:600}}
+  .block-container .module-head h2{{font-size:1.55rem!important}}
+  .stTabs [data-baseweb="tab-list"]{{gap:1.2rem;border-bottom:1px solid #AEBBC5}}
   .stTabs [aria-selected="true"]{{border-bottom:4px solid {RED}}}
   @media print{{[data-testid="stSidebar"],header,[data-testid="stToolbar"],.stRadio,.stDownloadButton{{display:none!important}}.block-container{{max-width:none;padding:0}}.hero{{box-shadow:none}}.print-break{{break-before:page}}}}
   @media(max-width:900px){{.metric-row{{grid-template-columns:repeat(2,1fr)}}.logo-crop{{height:70px}}}}
@@ -1014,7 +1020,7 @@ if module.startswith("Registro"):
             fig=px.treemap(facility_orgs,path=["nombre_corto"],values="puntos",color="organizacion",custom_data=["organizacion"],
                            color_discrete_sequence=["#3568B4","#9AC7F1","#E34D40","#EAA29A","#65AAA1","#9FE4AD","#F4D37D","#6E51AA","#E68A39"],
                            labels={"organizacion":"Organización","puntos":"Establecimientos"})
-            fig.update_traces(texttemplate="<b>%{label}</b><br>%{value}",textfont_size=18,
+            fig.update_traces(texttemplate="%{label}<br>%{value}",textfont_size=16,
                               hovertemplate="%{customdata[0]}<br>%{value} establecimientos<extra></extra>",
                               marker_line_color=PAPER,marker_line_width=3)
             fig.update_layout(showlegend=False)
@@ -1068,7 +1074,7 @@ if module.startswith("Registro"):
             fig=px.treemap(public_orgs,path=["nombre_corto"],values="puntos",color="organizacion",custom_data=["organizacion"],
                            color_discrete_sequence=["#3568B4","#9AC7F1","#E34D40","#EAA29A","#65AAA1","#9FE4AD","#F4D37D","#6E51AA","#E68A39"],
                            labels={"organizacion":"Organización","puntos":"Lugares"})
-            fig.update_traces(texttemplate="<b>%{label}</b><br>%{value}",textfont_size=18,
+            fig.update_traces(texttemplate="%{label}<br>%{value}",textfont_size=16,
                               hovertemplate="%{customdata[0]}<br>%{value} lugares<extra></extra>",
                               marker_line_color=PAPER,marker_line_width=3)
             fig.update_layout(showlegend=False)
