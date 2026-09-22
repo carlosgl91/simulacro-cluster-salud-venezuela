@@ -7,6 +7,7 @@ calendario piloto son simuladas y están identificadas como tales en la interfaz
 from __future__ import annotations
 
 import base64
+import html as html_lib
 import io
 import json
 import math
@@ -21,6 +22,7 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
+import streamlit.components.v1 as components
 
 # The desktop preview keeps its document libraries in a shared runtime.  Add
 # that location only after the data stack is loaded so its NumPy build cannot
@@ -545,6 +547,55 @@ def num(value: float | int) -> str:
     return f"{value:,.0f}".replace(",", ".")
 
 
+def support_ranking_table(ranking: pd.DataFrame, *, max_height: int = 700) -> None:
+    """Tabla legible con barras rojas; evita el color fijo del ProgressColumn de Streamlit."""
+    frame = ranking[["Organización", "Establecimiento", "Tipología", "Apoyos recibidos"]].copy()
+    maximum = max(1, int(frame["Apoyos recibidos"].max()))
+    rows = []
+    for row in frame.itertuples(index=False, name=None):
+        org, establishment, typology, supports = row
+        width = max(0, min(100, int(round(int(supports) / maximum * 100))))
+        rows.append(
+            "<tr>"
+            f"<td>{html_lib.escape(str(org))}</td>"
+            f"<td>{html_lib.escape(str(establishment))}</td>"
+            f"<td>{html_lib.escape(str(typology))}</td>"
+            "<td><div class='support-meter'>"
+            f"<span style='width:{width}%'></span><b>{int(supports)}</b>"
+            "</div></td></tr>"
+        )
+    height = min(max_height, 45 * len(frame) + 48)
+    st.markdown(
+        f"""
+        <div class="support-table-wrap" style="max-height:{height}px">
+          <table class="support-table">
+            <thead><tr><th>Organización</th><th>Establecimiento</th><th>Tipología</th><th>Apoyos recibidos</th></tr></thead>
+            <tbody>{''.join(rows)}</tbody>
+          </table>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def complete_dashboard_export() -> None:
+    """Abre la impresión del navegador para guardar toda la vista activa como PDF."""
+    with st.container(key="print_export"):
+        components.html(
+            f"""
+            <style>
+              html,body{{margin:0;background:transparent;font-family:Arial,sans-serif}}
+              button{{width:100%;border:0;border-radius:8px;padding:12px 16px;background:{RED};color:white;
+                      font-size:15px;font-weight:700;cursor:pointer}}
+              button:hover{{background:{shade(RED,.12)}}}
+            </style>
+            <button onclick="window.parent.focus(); window.parent.print();">Descargar tablero completo como PDF</button>
+            """,
+            height=48,
+        )
+        st.caption("En la ventana de impresión seleccione «Guardar como PDF». Se exportará toda la vista activa con los filtros actuales.")
+
+
 def add_map_marker_outline(fig: go.Figure, frame: pd.DataFrame, size_col: str) -> None:
     # px.scatter_map / go.Scattermap no admiten marker.line (el círculo de
     # MapLibre no soporta borde): se simula un contorno fino agregando una
@@ -725,7 +776,26 @@ st.markdown(f"""
   .block-container .module-head h2{{font-size:1.55rem!important}}
   .stTabs [data-baseweb="tab-list"]{{gap:1.2rem;border-bottom:1px solid {GRAY}}}
   .stTabs [aria-selected="true"]{{border-bottom:4px solid {RED}}}
-  @media print{{[data-testid="stSidebar"],header,[data-testid="stToolbar"],.stRadio,.stDownloadButton{{display:none!important}}.block-container{{max-width:none;padding:0}}.hero{{box-shadow:none}}.print-break{{break-before:page}}}}
+  .support-table-wrap{{overflow:auto;border:1px solid {tint(GRAY,.72)};border-radius:10px;background:white}}
+  .support-table{{width:100%;border-collapse:collapse;font-size:.88rem}}
+  .support-table th{{position:sticky;top:0;z-index:1;background:{tint(GRAY,.9)};color:{MUTED};text-align:left;padding:11px 12px;border-bottom:1px solid {tint(GRAY,.68)};font-weight:600}}
+  .support-table td{{padding:10px 12px;border-bottom:1px solid {tint(GRAY,.78)};vertical-align:middle}}
+  .support-table th:nth-child(1),.support-table td:nth-child(1){{width:16%}}
+  .support-table th:nth-child(2),.support-table td:nth-child(2){{width:34%}}
+  .support-table th:nth-child(3),.support-table td:nth-child(3){{width:28%}}
+  .support-table th:nth-child(4),.support-table td:nth-child(4){{width:22%}}
+  .support-meter{{display:grid;grid-template-columns:1fr 32px;gap:9px;align-items:center;position:relative}}
+  .support-meter::before{{content:"";grid-column:1;grid-row:1;height:10px;background:{tint(GRAY,.82)};border-radius:999px}}
+  .support-meter span{{grid-column:1;grid-row:1;height:10px;background:{RED};border-radius:999px;min-width:0}}
+  .support-meter b{{grid-column:2;font-weight:500;color:{INK};text-align:right}}
+  @media print{{
+    [data-testid="stSidebar"],header,[data-testid="stToolbar"],.stRadio,.stDownloadButton,.st-key-calendar_nav_btn,.st-key-print_export{{display:none!important}}
+    .block-container{{max-width:none!important;padding:0!important}}
+    .hero{{box-shadow:none}}
+    [data-testid="stPlotlyChart"],.support-table-wrap,.metric-row,[data-testid="stDataFrame"]{{break-inside:avoid;page-break-inside:avoid}}
+    .support-table-wrap{{max-height:none!important;overflow:visible!important}}
+    .print-break{{break-before:page}}
+  }}
   @media(max-width:900px){{.metric-row{{grid-template-columns:repeat(2,1fr)}}}}
 </style>
 """, unsafe_allow_html=True)
@@ -755,7 +825,7 @@ date_floor, date_ceiling = (
 hero_today_label = pd.Timestamp.today().strftime("%d/%m/%Y")
 st.markdown(f'<div class="hero"><b>OPS/OMS · CLÚSTER DE SALUD · VENEZUELA</b><h1>Tablero de la Respuesta en Salud del terremoto en Venezuela (M7.2 y M7.5)</h1><p>Presencia operativa, programación de actividades y resultados reportados</p><small>Fecha de consulta: {hero_today_label} · Periodo de reportes: {date_floor.strftime("%d/%m/%Y")} – {date_ceiling.strftime("%d/%m/%Y")}</small></div>', unsafe_allow_html=True)
 
-RADIO_MODULE_OPTIONS=["Registro de organizaciones e intervenciones", "Reportes periódicos"]
+RADIO_MODULE_OPTIONS=["Mapeo de socios, servicios y apoyos (F01)", "Reportes periódicos de acciones (F02)"]
 CALENDAR_MODULE="Calendario de brigadas"
 if "active_module" not in st.session_state:
     st.session_state.active_module = RADIO_MODULE_OPTIONS[1] if st.query_params.get("vista")=="reportes" else RADIO_MODULE_OPTIONS[0]
@@ -764,9 +834,20 @@ if "main_view_radio" not in st.session_state:
 
 def _go_to_calendar_module() -> None:
     st.session_state.active_module = CALENDAR_MODULE
+    # Desmarcar el radio principal. Si quedara seleccionado "Registro",
+    # volver a hacer clic sobre la misma opción no dispararía on_change y la
+    # aplicación permanecería atrapada en el calendario.
+    st.session_state.main_view_radio = None
+    st.query_params.pop("vista", None)
 
 def _sync_module_from_radio() -> None:
-    st.session_state.active_module = st.session_state.main_view_radio
+    selected = st.session_state.main_view_radio
+    if selected in RADIO_MODULE_OPTIONS:
+        st.session_state.active_module = selected
+        if selected == RADIO_MODULE_OPTIONS[1]:
+            st.query_params["vista"] = "reportes"
+        else:
+            st.query_params.pop("vista", None)
 
 nav_radio_col, nav_calendar_col = st.columns([5, 1.7])
 with nav_radio_col:
@@ -822,7 +903,7 @@ def filt(frame: pd.DataFrame, has_focus: bool = False) -> pd.DataFrame:
     return out
 
 
-if module.startswith("Registro"):
+if module == RADIO_MODULE_OPTIONS[0]:
     section_figures: dict[str, list[go.Figure]] = {}
     p=filt(points,True)
     # Universo de socios: el registro de organizaciones (con modalidad,
@@ -1140,11 +1221,7 @@ if module.startswith("Registro"):
         st.info("Ningún establecimiento cumple con los filtros seleccionados.")
     else:
         ranking=ranking.sort_values("apoyos",ascending=False).rename(columns={"organizacion":"Organización","lugar":"Establecimiento","tipo_punto":"Tipología","apoyos":"Apoyos recibidos"})
-        st.dataframe(
-            ranking[["Organización","Establecimiento","Tipología","Apoyos recibidos"]],
-            hide_index=True,width="stretch",height=min(700,44*len(ranking)+40),
-            column_config={"Apoyos recibidos":st.column_config.ProgressColumn("Apoyos recibidos",min_value=0,max_value=max(1,int(ranking["Apoyos recibidos"].max())),format="%d")},
-        )
+        support_ranking_table(ranking)
         n_zero=int((ranking["Apoyos recibidos"]==0).sum())
         st.caption(f"Cada fila suma las áreas y los tipos de apoyo recibidos por ese establecimiento (no montos). {n_zero} establecimiento(s) de la selección actual no registran ningún apoyo.")
 
@@ -1376,24 +1453,24 @@ if module.startswith("Registro"):
     )
 
     st.markdown("### Descargar infografía")
+    st.markdown("#### Vista completa")
+    complete_dashboard_export()
+    st.markdown("#### Resumen ejecutivo")
     report_palette={"navy":NAVY,"muted":MUTED,"ink":INK,"blue":BLUE,"border":tint(GRAY,.75),"pale":PALE}
     top_states=p.groupby("estado").id_punto.nunique().nlargest(12).sort_values()
     top_munis=p.groupby("municipio").id_punto.nunique().nlargest(12).sort_values()
     top_orgs=p.groupby("organizacion").id_punto.nunique().nlargest(12).sort_values()
     top_muni_inv=ranked.head(12).sort_values()
+    top_services=fs["servicio"].value_counts().nlargest(12).sort_values()
+    top_supports=fsup["tipo_apoyo"].value_counts().nlargest(12).sort_values()
+    report_staff=pd.to_numeric(staffing[all_staff_cols].stack(),errors="coerce").unstack().sum().sort_values(ascending=False).head(12).sort_values()
+    report_staff.index=report_staff.index.str.replace("personal_","",regex=False).str.replace("_"," ").str.title()
+    top_donors=donor.groupby("donantes").id_servicio.nunique().nlargest(12).sort_values()
     # Mapa coroplético por estado: en el PDF pesa más el patrón territorial
     # (qué estados concentran la respuesta) que la ubicación exacta de cada
     # punto, que en papel se amontona y no se puede acercar como en el mapa
     # interactivo de arriba.
     points_by_state_f01=p.groupby("estado").id_punto.nunique().to_dict()
-    # Capacidad operativa: mismo cómputo que la gráfica de "Personal
-    # disponible por perfil" de más arriba, pero sobre "staffing" completo
-    # (los filtros globales), no sobre el filtro local de socio/punto de
-    # esa sección — el PDF debe reflejar el alcance de los filtros de la
-    # barra lateral, no un widget de exploración aparte.
-    staff_totals_f01=pd.to_numeric(staffing[all_staff_cols].stack(),errors="coerce").unstack().sum().sort_values(ascending=False).head(12).sort_values()
-    staff_labels_f01=[c.replace("personal_","").replace("_"," ").title() for c in staff_totals_f01.index]
-    staff_labels_f01=[{"Medico":"Médicos(as)","Enfermero":"Enfermeros(as)","Administrativos":"Administrativos(as)","Psicologo":"Psicólogos(as)","Pediatria":"Pediatría","Ginecologia":"Ginecología","Odontologos":"Odontólogos(as)","Psiquiatra":"Psiquiatras"}.get(l,l) for l in staff_labels_f01]
     available_sections_f01={
         "Panorama territorial": {
             "title": "Panorama territorial",
@@ -1418,20 +1495,35 @@ if module.startswith("Registro"):
             ]],
             "caption": "El foco distingue acciones en el establecimiento de salud de acciones de salud pública.",
         },
-        "Capacidad operativa (personal reportado)": {
-            "title": "Capacidad operativa (personal reportado)",
+        "Servicios y tipos de apoyo registrados": {
+            "title": "Servicios y tipos de apoyo registrados",
             "rows": [[
-                ("Top perfiles profesionales por personal disponible",bar_chart(staff_labels_f01,staff_totals_f01.tolist(),NAVY,MUTED,tint(GRAY,.75),tint(GRAY,.85),height=190,width=735,label_width=150),26.0),
+                ("Áreas o servicios que reciben apoyo",bar_chart(top_services.index.tolist(),top_services.tolist(),RED,MUTED,tint(GRAY,.75),tint(GRAY,.85),height=220,width=350,label_width=145),12.7),
+                ("Tipos de apoyo proporcionado",bar_chart(top_supports.index.tolist(),top_supports.tolist(),ORANGE,MUTED,tint(GRAY,.75),tint(GRAY,.85),height=220,width=350,label_width=145),12.7),
             ]],
-            "caption": "Suma del personal disponible reportado por perfil profesional (bloque de cobertura del F01), dentro del alcance de los filtros activos.",
-        } if not staff_totals_f01.empty and staff_totals_f01.sum()>0 else None,
+            "caption": "Cuenta puntos registrados en F01 que declaran cada servicio o tipo de apoyo.",
+        },
+        "Capacidad operativa": {
+            "title": "Capacidad operativa",
+            "rows": [[
+                ("Personal disponible por perfil",bar_chart(report_staff.index.tolist(),report_staff.tolist(),RED,MUTED,tint(GRAY,.75),tint(GRAY,.85),height=230,width=735,label_width=170),26.0),
+            ]],
+            "caption": "Suma del personal disponible reportado en los puntos incluidos por los filtros activos.",
+        },
         "Inversión registrada por municipio": {
             "title": "Inversión registrada por municipio",
             "rows": [[
                 ("Top municipios por inversión (USD)",bar_chart(top_muni_inv.index.tolist(),top_muni_inv.tolist(),ORANGE,MUTED,tint(GRAY,.75),tint(GRAY,.85),height=190,width=735,label_width=150),26.0),
             ]],
             "caption": "Montos ilustrativos del simulacro (no representan cifras reales de financiamiento).",
-        } if not ranked.empty else None,
+        },
+        "Fuentes que respaldan la oferta": {
+            "title": "Fuentes que respaldan la oferta",
+            "rows": [[
+                ("Puntos respaldados por fuente",bar_chart(top_donors.index.tolist(),top_donors.tolist(),TEAL,MUTED,tint(GRAY,.75),tint(GRAY,.85),height=230,width=735,label_width=180),26.0),
+            ]],
+            "caption": "Cuenta vínculos fuente–punto reportados; no representa montos ni atribuye financiamiento a un servicio específico.",
+        },
     }
     available_sections_f01={k:v for k,v in available_sections_f01.items() if v is not None}
     selected_f01=section_picker("Elegí qué secciones incluir en el PDF",list(available_sections_f01.keys()),"f01_report_sections")
@@ -1441,7 +1533,7 @@ if module.startswith("Registro"):
         period_text_f01=f"del {date_start.strftime('%d/%m/%Y')} al {date_end.strftime('%d/%m/%Y')}"
         report_bytes=build_report(
             title="Tablero de la Respuesta en Salud del terremoto en Venezuela",
-            subtitle="Socios y apoyos del Clúster Salud — Registro de organizaciones e intervenciones",
+            subtitle="Socios y apoyos del Clúster Salud — Mapeo de socios, servicios y apoyos",
             scope_text=f"Universo vigente según los filtros de estado, municipio, organización y foco activos, para el período {period_text_f01}.",
             as_of_text=f"Generado el {pd.Timestamp.today().strftime('%d/%m/%Y')} · Corte {period_text_f01}",
             kpis=[
@@ -1458,7 +1550,7 @@ if module.startswith("Registro"):
         )
         _, dl_col, _ = st.columns([1.0,1.15,1.0])
         with dl_col:
-            st.download_button("Descargar infografía",data=report_bytes,file_name=f"Infografia_F01_{pd.Timestamp.today().strftime('%Y%m%d')}.pdf",mime="application/pdf",type="primary",width="stretch")
+            st.download_button("Descargar resumen PDF",data=report_bytes,file_name=f"Resumen_F01_{pd.Timestamp.today().strftime('%Y%m%d')}.pdf",mime="application/pdf",width="stretch")
 elif module.startswith("Reportes"):
     section_figures: dict[str, list[go.Figure]] = {}
     r=filt(reports,True); ids=set(r.id_reporte); res=results[results.id_reporte.isin(ids)].copy(); active=r.sort_values("fecha_reporte").drop_duplicates(["organizacion","nombre_sitio"],keep="last")
@@ -1495,10 +1587,19 @@ elif module.startswith("Reportes"):
         lat_lo,lat_hi=ref.latitud.min(),ref.latitud.max()
         lon_lo,lon_hi=ref.longitud.min(),ref.longitud.max()
         lat_pad=max(0.2,(lat_hi-lat_lo)*0.25); lon_pad=max(0.2,(lon_hi-lon_lo)*0.25)
+        # Los límites por sí solos restringen la navegación, pero no cambian
+        # la vista inicial. Se calcula además el centro y el zoom para que
+        # TODOS los puntos georreferenciados de F02 entren desde el primer
+        # render, incluso cuando se concentran en una franja costera.
+        lat_span=max(float(lat_hi-lat_lo),0.01)
+        lon_span=max(float(lon_hi-lon_lo),0.01)
+        zoom_x=math.log2((360*1200)/(512*lon_span*1.55))
+        zoom_y=math.log2((360*590)/(512*lat_span*1.55))
+        fitted_zoom=max(4.0,min(10.5,zoom_x,zoom_y))
         fig.update_layout(map=dict(bounds=dict(
             west=max(-180,lon_lo-lon_pad), east=min(180,lon_hi+lon_pad),
             south=max(-90,lat_lo-lat_pad), north=min(90,lat_hi+lat_pad),
-        )))
+        ),center=dict(lat=float((lat_lo+lat_hi)/2),lon=float((lon_lo+lon_hi)/2)),zoom=fitted_zoom))
         focus_counts=mapped.foco_formulario.value_counts()
         fig.for_each_trace(lambda t: t.update(name=f"{t.name} ({num(focus_counts.get(t.name,0))})"))
     plot(fig,590,"f02_map",is_map=True)
@@ -2017,11 +2118,7 @@ elif module.startswith("Reportes"):
                 st.info("Ningún establecimiento con reporte cumple con los filtros seleccionados.")
             else:
                 ranking=ranking.sort_values("apoyos",ascending=False).rename(columns={"organizacion":"Organización","lugar":"Establecimiento","tipo_punto":"Tipología","apoyos":"Apoyos recibidos"})
-                st.dataframe(
-                    ranking[["Organización","Establecimiento","Tipología","Apoyos recibidos"]],
-                    hide_index=True,width="stretch",height=min(700,44*len(ranking)+40),
-                    column_config={"Apoyos recibidos":st.column_config.ProgressColumn("Apoyos recibidos",min_value=0,max_value=max(1,int(ranking["Apoyos recibidos"].max())),format="%d")},
-                )
+                support_ranking_table(ranking)
                 st.caption("Apoyos reales registrados en F01 (áreas y tipos de apoyo, bloques 5.1/5.2) para los establecimientos que presentaron reporte periódico (F02) dentro del alcance de los filtros activos. Dato real de registro, no simulado.")
 
         if include_population:
@@ -2086,9 +2183,18 @@ elif module.startswith("Reportes"):
     _render_focus_reports("Acciones de salud pública", "Salud pública", YELLOW, "pub", "Tipos de lugar de intervención", "Reportes de acciones de salud pública", include_population=True)
 
     st.markdown("### Descargar infografía")
+    st.markdown("#### Vista completa")
+    complete_dashboard_export()
+    st.markdown("#### Resumen ejecutivo")
     report_palette={"navy":NAVY,"muted":MUTED,"ink":INK,"blue":BLUE,"border":tint(GRAY,.75),"pale":PALE}
     top_orgs_f02=org_points_by_focus.groupby("organizacion").puntos.sum().nlargest(12).sort_values()
     area_volume=res.groupby("area",as_index=False).total.sum().nlargest(12,"total").sort_values("total")
+    top_states_f02=r.groupby("estado").id_reporte.nunique().nlargest(12).sort_values()
+    top_munis_f02=r.groupby("municipio").id_reporte.nunique().nlargest(12).sort_values()
+    reports_by_focus=focus_summary.set_index("foco_formulario")["reportes"].sort_values()
+    totals_by_unit=res.groupby("unidad").total.sum().nlargest(12).sort_values()
+    population_totals=res[["mujeres","hombres","ninas","ninos"]].sum().rename({"mujeres":"Mujeres","hombres":"Hombres","ninas":"Niñas","ninos":"Niños"})
+    disability_by_area=res.groupby("area").discapacidad.sum().nlargest(12).sort_values()
     # Mismo criterio que en F01: coroplético por estado en vez de puntos.
     # Se cuentan reportes periódicos (no puntos) porque es la unidad propia
     # del F02, y así el mapa dice algo distinto del mapa del F01.
@@ -2116,6 +2222,30 @@ elif module.startswith("Reportes"):
             ]],
             "caption": "Suma de indicadores por área (personas, casos, procedimientos, kits, profesionales o instituciones); no deben sumarse entre sí como si fueran la misma unidad.",
         },
+        "Distribución territorial de los reportes": {
+            "title": "Distribución territorial de los reportes",
+            "rows": [[
+                ("Estados con más reportes",bar_chart(top_states_f02.index.tolist(),top_states_f02.tolist(),RED,MUTED,tint(GRAY,.75),tint(GRAY,.85),height=210,width=350,label_width=115),12.7),
+                ("Municipios con más reportes",bar_chart(top_munis_f02.index.tolist(),top_munis_f02.tolist(),ORANGE,MUTED,tint(GRAY,.75),tint(GRAY,.85),height=210,width=350,label_width=125),12.7),
+            ]],
+            "caption": "Cuenta formularios F02 recibidos dentro del alcance de los filtros activos.",
+        },
+        "Composición de los resultados reportados": {
+            "title": "Composición de los resultados reportados",
+            "rows": [[
+                ("Reportes periódicos por foco",bar_chart(reports_by_focus.index.tolist(),reports_by_focus.tolist(),RED,MUTED,tint(GRAY,.75),tint(GRAY,.85),height=180,width=350,label_width=145),12.7),
+                ("Resultados por unidad de medida",bar_chart(totals_by_unit.index.tolist(),totals_by_unit.tolist(),BLUE,MUTED,tint(GRAY,.75),tint(GRAY,.85),height=180,width=350,label_width=125),12.7),
+            ]],
+            "caption": "Las unidades se presentan separadas; no deben sumarse como si representaran una misma medida.",
+        },
+        "Población reportada": {
+            "title": "Población reportada",
+            "rows": [[
+                ("Composición por sexo y grupo de edad",composition_bar(population_totals.index.tolist(),population_totals.tolist(),[RED,BLUE,tint(RED,.45),SKY],MUTED,width=350,height=115),12.7),
+                ("Personas con discapacidad por acción",bar_chart(disability_by_area.index.tolist(),disability_by_area.tolist(),TEAL,MUTED,tint(GRAY,.75),tint(GRAY,.85),height=210,width=350,label_width=145),12.7),
+            ]],
+            "caption": "Las cifras son sumas de indicadores y no representan personas únicas. La discapacidad es un subconjunto transversal.",
+        },
     }
     available_sections_f02={k:v for k,v in available_sections_f02.items() if v is not None}
     selected_f02=section_picker("Elegí qué secciones incluir en el PDF",list(available_sections_f02.keys()),"f02_report_sections")
@@ -2125,7 +2255,7 @@ elif module.startswith("Reportes"):
         period_text_f02=f"del {date_start.strftime('%d/%m/%Y')} al {date_end.strftime('%d/%m/%Y')}"
         report_bytes=build_report(
             title="Tablero de la Respuesta en Salud del terremoto en Venezuela",
-            subtitle="Reporte de acciones — Reportes periódicos (F02)",
+            subtitle="Reportes periódicos de acciones (F02)",
             scope_text=f"Universo de reportes vigente según los filtros de estado, municipio, organización y foco activos, para el período {period_text_f02}.",
             as_of_text=f"Generado el {pd.Timestamp.today().strftime('%d/%m/%Y')} · Corte {period_text_f02}",
             kpis=[(c[0],c[1]) for c in cards],
@@ -2135,7 +2265,7 @@ elif module.startswith("Reportes"):
         )
         _, dl_col, _ = st.columns([1.0,1.15,1.0])
         with dl_col:
-            st.download_button("Descargar infografía",data=report_bytes,file_name=f"Infografia_F02_{pd.Timestamp.today().strftime('%Y%m%d')}.pdf",mime="application/pdf",type="primary",width="stretch")
+            st.download_button("Descargar resumen PDF",data=report_bytes,file_name=f"Resumen_F02_{pd.Timestamp.today().strftime('%Y%m%d')}.pdf",mime="application/pdf",width="stretch")
 else:
     section_figures: dict[str, list[go.Figure]] = {}
     section_band("CALENDARIO DE BRIGADAS", "Aquí se registran y planifican todas las acciones de salud pública.")
@@ -2406,4 +2536,7 @@ else:
                 )
         else:
             st.info("Haga clic en un día del calendario para ver el detalle de organizaciones y actividades planificadas.")
+
+        st.markdown("### Descargar calendario como infografía")
+        complete_dashboard_export()
 

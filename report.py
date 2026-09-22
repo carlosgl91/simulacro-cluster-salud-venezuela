@@ -26,6 +26,7 @@ from reportlab.platypus import (
 )
 from reportlab.platypus import (
     KeepTogether,
+    PageBreak,
     Paragraph,
     SimpleDocTemplate,
     Spacer,
@@ -556,14 +557,10 @@ def build_report(*, title: str, subtitle: str, scope_text: str, as_of_text: str,
         kpi_cards(kpis, styles, palette["border"]),
         Spacer(1, 10),
     ]
-    for section in sections:
-        # Cada sección se mantiene junta (KeepTogether) para no partir un
-        # panel a la mitad entre dos páginas, pero SIN forzar un PageBreak
-        # entre secciones: así varias secciones cortas comparten página en
-        # vez de dejar la mayor parte de cada hoja en blanco (una gráfica
-        # chica sola en una página A4 apaisada se veía "a medias").
-        # ReportLab solo pasa a la página siguiente cuando el contenido no
-        # entra en el espacio restante.
+    for section_index, section in enumerate(sections):
+        # Cada sección empieza en una página nueva y se mantiene junta para
+        # evitar recortes. Así la descarga conserva todas las secciones del
+        # tablero y cada página funciona como una lámina independiente.
         section_flow: list = [Paragraph(_safe(section["title"]), styles["h1"]), Spacer(1, 2)]
         for row in section["rows"]:
             # row: list of (panel_title, content_drawing_or_table, width_cm)
@@ -573,6 +570,8 @@ def build_report(*, title: str, subtitle: str, scope_text: str, as_of_text: str,
         if section.get("caption"):
             section_flow.append(Paragraph(_safe(section["caption"]), styles["caption"]))
         section_flow.append(Spacer(1, 10))
+        if section_index > 0:
+            story.append(PageBreak())
         story.append(KeepTogether(section_flow))
     story.append(Spacer(1, 8))
     story.append(Paragraph("Simulacro metodológico.", styles["caption"]))
