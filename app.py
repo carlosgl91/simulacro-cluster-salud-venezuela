@@ -867,7 +867,7 @@ def filt(frame: pd.DataFrame, has_focus: bool = False) -> pd.DataFrame:
     return out
 
 
-if module.startswith("Registro"):
+if module == RADIO_MODULE_OPTIONS[0]:
     section_figures: dict[str, list[go.Figure]] = {}
     p=filt(points,True)
     # Universo de socios: el registro de organizaciones (con modalidad,
