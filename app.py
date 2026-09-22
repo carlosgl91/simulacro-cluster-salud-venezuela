@@ -22,6 +22,7 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
+import streamlit.components.v1 as components
 
 # The desktop preview keeps its document libraries in a shared runtime.  Add
 # that location only after the data stack is loaded so its NumPy build cannot
@@ -541,6 +542,24 @@ def support_ranking_table(ranking: pd.DataFrame, *, max_height: int = 700) -> No
     )
 
 
+def complete_dashboard_export() -> None:
+    """Abre la impresión del navegador para guardar toda la vista activa como PDF."""
+    with st.container(key="print_export"):
+        components.html(
+            f"""
+            <style>
+              html,body{{margin:0;background:transparent;font-family:Arial,sans-serif}}
+              button{{width:100%;border:0;border-radius:8px;padding:12px 16px;background:{RED};color:white;
+                      font-size:15px;font-weight:700;cursor:pointer}}
+              button:hover{{background:{shade(RED,.12)}}}
+            </style>
+            <button onclick="window.parent.focus(); window.parent.print();">Descargar tablero completo como PDF</button>
+            """,
+            height=48,
+        )
+        st.caption("En la ventana de impresión seleccione «Guardar como PDF». Se exportará toda la vista activa con los filtros actuales.")
+
+
 def add_map_marker_outline(fig: go.Figure, frame: pd.DataFrame, size_col: str) -> None:
     # px.scatter_map / go.Scattermap no admiten marker.line (el círculo de
     # MapLibre no soporta borde): se simula un contorno fino agregando una
@@ -733,7 +752,14 @@ st.markdown(f"""
   .support-meter::before{{content:"";grid-column:1;grid-row:1;height:10px;background:{tint(GRAY,.82)};border-radius:999px}}
   .support-meter span{{grid-column:1;grid-row:1;height:10px;background:{RED};border-radius:999px;min-width:0}}
   .support-meter b{{grid-column:2;font-weight:500;color:{INK};text-align:right}}
-  @media print{{[data-testid="stSidebar"],header,[data-testid="stToolbar"],.stRadio,.stDownloadButton{{display:none!important}}.block-container{{max-width:none;padding:0}}.hero{{box-shadow:none}}.print-break{{break-before:page}}}}
+  @media print{{
+    [data-testid="stSidebar"],header,[data-testid="stToolbar"],.stRadio,.stDownloadButton,.st-key-calendar_nav_btn,.st-key-print_export{{display:none!important}}
+    .block-container{{max-width:none!important;padding:0!important}}
+    .hero{{box-shadow:none}}
+    [data-testid="stPlotlyChart"],.support-table-wrap,.metric-row,[data-testid="stDataFrame"]{{break-inside:avoid;page-break-inside:avoid}}
+    .support-table-wrap{{max-height:none!important;overflow:visible!important}}
+    .print-break{{break-before:page}}
+  }}
   @media(max-width:900px){{.metric-row{{grid-template-columns:repeat(2,1fr)}}}}
 </style>
 """, unsafe_allow_html=True)
@@ -1391,6 +1417,9 @@ if module.startswith("Registro"):
     )
 
     st.markdown("### Descargar infografía")
+    st.markdown("#### Vista completa")
+    complete_dashboard_export()
+    st.markdown("#### Resumen ejecutivo")
     report_palette={"navy":NAVY,"muted":MUTED,"ink":INK,"blue":BLUE,"border":tint(GRAY,.75)}
     top_states=p.groupby("estado").id_punto.nunique().nlargest(12).sort_values()
     top_munis=p.groupby("municipio").id_punto.nunique().nlargest(12).sort_values()
@@ -1465,7 +1494,7 @@ if module.startswith("Registro"):
     )
     _, dl_col, _ = st.columns([1.0,1.15,1.0])
     with dl_col:
-        st.download_button("Descargar infografía",data=report_bytes,file_name=f"Infografia_F01_{pd.Timestamp.today().strftime('%Y%m%d')}.pdf",mime="application/pdf",type="primary",width="stretch")
+        st.download_button("Descargar resumen PDF",data=report_bytes,file_name=f"Resumen_F01_{pd.Timestamp.today().strftime('%Y%m%d')}.pdf",mime="application/pdf",width="stretch")
 elif module.startswith("Reportes"):
     section_figures: dict[str, list[go.Figure]] = {}
     r=filt(reports,True); ids=set(r.id_reporte); res=results[results.id_reporte.isin(ids)].copy(); active=r.sort_values("fecha_reporte").drop_duplicates(["organizacion","nombre_sitio"],keep="last")
@@ -2089,6 +2118,9 @@ elif module.startswith("Reportes"):
     _render_focus_reports("Acciones de salud pública", "Salud pública", YELLOW, "pub", "Tipos de lugar de intervención", "Reportes de acciones de salud pública", include_population=True)
 
     st.markdown("### Descargar infografía")
+    st.markdown("#### Vista completa")
+    complete_dashboard_export()
+    st.markdown("#### Resumen ejecutivo")
     report_palette={"navy":NAVY,"muted":MUTED,"ink":INK,"blue":BLUE,"border":tint(GRAY,.75)}
     top_orgs_f02=org_points_by_focus.groupby("organizacion").puntos.sum().nlargest(12).sort_values()
     area_volume=res.groupby("area",as_index=False).total.sum().nlargest(12,"total").sort_values("total")
@@ -2149,7 +2181,7 @@ elif module.startswith("Reportes"):
     )
     _, dl_col, _ = st.columns([1.0,1.15,1.0])
     with dl_col:
-        st.download_button("Descargar infografía",data=report_bytes,file_name=f"Infografia_F02_{pd.Timestamp.today().strftime('%Y%m%d')}.pdf",mime="application/pdf",type="primary",width="stretch")
+        st.download_button("Descargar resumen PDF",data=report_bytes,file_name=f"Resumen_F02_{pd.Timestamp.today().strftime('%Y%m%d')}.pdf",mime="application/pdf",width="stretch")
 else:
     section_figures: dict[str, list[go.Figure]] = {}
     section_band("CALENDARIO DE BRIGADAS", "Aquí se registran y planifican todas las acciones de salud pública.")
@@ -2420,4 +2452,7 @@ else:
                 )
         else:
             st.info("Haga clic en un día del calendario para ver el detalle de organizaciones y actividades planificadas.")
+
+        st.markdown("### Descargar calendario como infografía")
+        complete_dashboard_export()
 
