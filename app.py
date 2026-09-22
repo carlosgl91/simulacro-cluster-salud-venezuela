@@ -772,9 +772,20 @@ if "main_view_radio" not in st.session_state:
 
 def _go_to_calendar_module() -> None:
     st.session_state.active_module = CALENDAR_MODULE
+    # Desmarcar el radio principal. Si quedara seleccionado "Registro",
+    # volver a hacer clic sobre la misma opción no dispararía on_change y la
+    # aplicación permanecería atrapada en el calendario.
+    st.session_state.main_view_radio = None
+    st.query_params.pop("vista", None)
 
 def _sync_module_from_radio() -> None:
-    st.session_state.active_module = st.session_state.main_view_radio
+    selected = st.session_state.main_view_radio
+    if selected in RADIO_MODULE_OPTIONS:
+        st.session_state.active_module = selected
+        if selected == RADIO_MODULE_OPTIONS[1]:
+            st.query_params["vista"] = "reportes"
+        else:
+            st.query_params.pop("vista", None)
 
 nav_radio_col, nav_calendar_col = st.columns([5, 1.7])
 with nav_radio_col:
