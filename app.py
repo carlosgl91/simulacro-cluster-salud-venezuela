@@ -29,7 +29,7 @@ _shared_packages = Path(r"C:\Users\claud\.cache\codex-runtimes\codex-primary-run
 if _shared_packages.exists():
     sys.path.append(str(_shared_packages))
 
-from report import build_report, bar_chart, composition_bar, map_image
+from report import build_report, bar_chart, composition_bar, choropleth_image
 
 
 ROOT = Path(__file__).resolve().parent
@@ -1376,18 +1376,16 @@ if module.startswith("Registro"):
     )
 
     st.markdown("### Descargar infografía")
-    report_palette={"navy":NAVY,"muted":MUTED,"ink":INK,"blue":BLUE,"border":tint(GRAY,.75)}
+    report_palette={"navy":NAVY,"muted":MUTED,"ink":INK,"blue":BLUE,"border":tint(GRAY,.75),"pale":PALE}
     top_states=p.groupby("estado").id_punto.nunique().nlargest(12).sort_values()
     top_munis=p.groupby("municipio").id_punto.nunique().nlargest(12).sort_values()
     top_orgs=p.groupby("organizacion").id_punto.nunique().nlargest(12).sort_values()
     top_muni_inv=ranked.head(12).sort_values()
-    # Mapa: se recalcula acá (en vez de reusar el "mapped" del mapa
-    # interactivo de arriba) porque ese solo existe dentro de la rama
-    # "else" de "if mapped.empty" — recomputar es barato y evita depender
-    # de una variable que podría no estar definida según los filtros.
-    report_map_focus_colors={"Acciones en el establecimiento de salud":RED,"Acciones de salud pública":YELLOW}
-    report_map_points_f01=p.dropna(subset=["latitud","longitud"]).assign(foco_formulario=lambda d: d.foco.map({"Establecimiento de salud":"Acciones en el establecimiento de salud","Salud pública":"Acciones de salud pública"}))
-    map_records_f01=report_map_points_f01.rename(columns={"latitud":"lat","longitud":"lon"})[["lat","lon","foco_formulario"]].to_dict("records")
+    # Mapa coroplético por estado: en el PDF pesa más el patrón territorial
+    # (qué estados concentran la respuesta) que la ubicación exacta de cada
+    # punto, que en papel se amontona y no se puede acercar como en el mapa
+    # interactivo de arriba.
+    points_by_state_f01=p.groupby("estado").id_punto.nunique().to_dict()
     # Capacidad operativa: mismo cómputo que la gráfica de "Personal
     # disponible por perfil" de más arriba, pero sobre "staffing" completo
     # (los filtros globales), no sobre el filtro local de socio/punto de
@@ -1405,13 +1403,13 @@ if module.startswith("Registro"):
             ]],
             "caption": "Cuenta puntos de intervención distintos (F01) dentro del alcance de los filtros activos.",
         },
-        "Mapa de intervenciones registradas": {
-            "title": "Mapa de intervenciones registradas",
+        "Mapa de intervenciones por estado": {
+            "title": "Mapa de intervenciones por estado",
             "rows": [[
-                ("Ubicación de los puntos de intervención",map_image(load_estado_geojson()["features"],map_records_f01,land_color=tint(GRAY,.88),border_color=tint(GRAY,.55),point_color_by="foco_formulario",point_colors=report_map_focus_colors,default_point_color=BLUE,width_px=1000,height_px=500,width_cm=25.0,height_cm=12.5),26.0),
+                ("Puntos de intervención registrados por estado",choropleth_image(load_estado_geojson()["features"],points_by_state_f01,low_color=tint(SKY,.55),high_color=NAVY,context_color=tint(GRAY,.86),border_color=tint(GRAY,.5),label_color=NAVY,value_caption="Puntos de intervención",width_px=1000,height_px=420,width_cm=25.0,height_cm=10.5),26.0),
             ]],
-            "caption": "Mapa ilustrativo de los puntos con coordenadas válidas dentro del alcance de los filtros activos; límites administrativos con fines cartográficos.",
-        } if not report_map_points_f01.empty else None,
+            "caption": "La intensidad del color y la cifra de cada burbuja indican los puntos de intervención registrados en ese estado; los estados en gris no tienen registros dentro de los filtros activos. Límites administrativos con fines cartográficos.",
+        } if points_by_state_f01 else None,
         "Socios y distribución por foco": {
             "title": "Socios y distribución por foco",
             "rows": [[
@@ -1456,6 +1454,7 @@ if module.startswith("Registro"):
             ],
             sections=[available_sections_f01[t] for t in available_sections_f01 if t in selected_f01],
             palette=report_palette,
+            logo_path=ROOT / "logos_formularios_hd.png",
         )
         _, dl_col, _ = st.columns([1.0,1.15,1.0])
         with dl_col:
@@ -2087,15 +2086,13 @@ elif module.startswith("Reportes"):
     _render_focus_reports("Acciones de salud pública", "Salud pública", YELLOW, "pub", "Tipos de lugar de intervención", "Reportes de acciones de salud pública", include_population=True)
 
     st.markdown("### Descargar infografía")
-    report_palette={"navy":NAVY,"muted":MUTED,"ink":INK,"blue":BLUE,"border":tint(GRAY,.75)}
+    report_palette={"navy":NAVY,"muted":MUTED,"ink":INK,"blue":BLUE,"border":tint(GRAY,.75),"pale":PALE}
     top_orgs_f02=org_points_by_focus.groupby("organizacion").puntos.sum().nlargest(12).sort_values()
     area_volume=res.groupby("area",as_index=False).total.sum().nlargest(12,"total").sort_values("total")
-    # Mismo criterio que en F01: se recalcula el universo de puntos para el
-    # mapa a partir de "active" (no del "mapped" del mapa interactivo de
-    # arriba, que solo existe dentro de su propia rama condicional).
-    report_map_focus_colors_f02={"Acciones en el establecimiento de salud":RED,"Acciones de salud pública":YELLOW}
-    report_map_points_f02=active.dropna(subset=["latitud","longitud"]).assign(foco_formulario=lambda d: d.foco.map({"Establecimiento de salud":"Acciones en el establecimiento de salud","Salud pública":"Acciones de salud pública"}))
-    map_records_f02=report_map_points_f02.rename(columns={"latitud":"lat","longitud":"lon"})[["lat","lon","foco_formulario"]].to_dict("records")
+    # Mismo criterio que en F01: coroplético por estado en vez de puntos.
+    # Se cuentan reportes periódicos (no puntos) porque es la unidad propia
+    # del F02, y así el mapa dice algo distinto del mapa del F01.
+    reports_by_state_f02=r.groupby("estado").id_reporte.nunique().to_dict()
     available_sections_f02={
         "Organizaciones y distribución por foco": {
             "title": "Organizaciones y distribución por foco",
@@ -2105,13 +2102,13 @@ elif module.startswith("Reportes"):
             ]],
             "caption": "Cuenta puntos distintos (no reportes); una organización con varios puntos aparece una sola vez.",
         },
-        "Mapa de puntos con reporte periódico": {
-            "title": "Mapa de puntos con reporte periódico",
+        "Mapa de reportes por estado": {
+            "title": "Mapa de reportes por estado",
             "rows": [[
-                ("Ubicación de los puntos con reporte",map_image(load_estado_geojson()["features"],map_records_f02,land_color=tint(GRAY,.88),border_color=tint(GRAY,.55),point_color_by="foco_formulario",point_colors=report_map_focus_colors_f02,default_point_color=BLUE,width_px=1000,height_px=500,width_cm=25.0,height_cm=12.5),26.0),
+                ("Reportes periódicos recibidos por estado",choropleth_image(load_estado_geojson()["features"],reports_by_state_f02,low_color=tint(SKY,.55),high_color=NAVY,context_color=tint(GRAY,.86),border_color=tint(GRAY,.5),label_color=NAVY,value_caption="Reportes periódicos",width_px=1000,height_px=420,width_cm=25.0,height_cm=10.5),26.0),
             ]],
-            "caption": "Mapa ilustrativo de los puntos con coordenadas válidas y reporte periódico vigente; límites administrativos con fines cartográficos.",
-        } if not report_map_points_f02.empty else None,
+            "caption": "La intensidad del color y la cifra de cada burbuja indican los reportes periódicos recibidos en ese estado; los estados en gris no tienen reportes dentro de los filtros activos. Límites administrativos con fines cartográficos.",
+        } if reports_by_state_f02 else None,
         "Volumen reportado por área temática": {
             "title": "Volumen reportado por área temática",
             "rows": [[
@@ -2134,6 +2131,7 @@ elif module.startswith("Reportes"):
             kpis=[(c[0],c[1]) for c in cards],
             sections=[available_sections_f02[t] for t in available_sections_f02 if t in selected_f02],
             palette=report_palette,
+            logo_path=ROOT / "logos_formularios_hd.png",
         )
         _, dl_col, _ = st.columns([1.0,1.15,1.0])
         with dl_col:
