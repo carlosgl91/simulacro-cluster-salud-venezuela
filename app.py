@@ -1531,10 +1531,19 @@ elif module.startswith("Reportes"):
         lat_lo,lat_hi=ref.latitud.min(),ref.latitud.max()
         lon_lo,lon_hi=ref.longitud.min(),ref.longitud.max()
         lat_pad=max(0.2,(lat_hi-lat_lo)*0.25); lon_pad=max(0.2,(lon_hi-lon_lo)*0.25)
+        # Los límites por sí solos restringen la navegación, pero no cambian
+        # la vista inicial. Se calcula además el centro y el zoom para que
+        # TODOS los puntos georreferenciados de F02 entren desde el primer
+        # render, incluso cuando se concentran en una franja costera.
+        lat_span=max(float(lat_hi-lat_lo),0.01)
+        lon_span=max(float(lon_hi-lon_lo),0.01)
+        zoom_x=math.log2((360*1200)/(512*lon_span*1.55))
+        zoom_y=math.log2((360*590)/(512*lat_span*1.55))
+        fitted_zoom=max(4.0,min(10.5,zoom_x,zoom_y))
         fig.update_layout(map=dict(bounds=dict(
             west=max(-180,lon_lo-lon_pad), east=min(180,lon_hi+lon_pad),
             south=max(-90,lat_lo-lat_pad), north=min(90,lat_hi+lat_pad),
-        )))
+        ),center=dict(lat=float((lat_lo+lat_hi)/2),lon=float((lon_lo+lon_hi)/2)),zoom=fitted_zoom))
         focus_counts=mapped.foco_formulario.value_counts()
         fig.for_each_trace(lambda t: t.update(name=f"{t.name} ({num(focus_counts.get(t.name,0))})"))
     plot(fig,590,"f02_map",is_map=True)
