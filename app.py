@@ -7,6 +7,7 @@ calendario piloto son simuladas y están identificadas como tales en la interfaz
 from __future__ import annotations
 
 import base64
+import html as html_lib
 import io
 import json
 import math
@@ -509,6 +510,37 @@ def num(value: float | int) -> str:
     return f"{value:,.0f}".replace(",", ".")
 
 
+def support_ranking_table(ranking: pd.DataFrame, *, max_height: int = 700) -> None:
+    """Tabla legible con barras rojas; evita el color fijo del ProgressColumn de Streamlit."""
+    frame = ranking[["Organización", "Establecimiento", "Tipología", "Apoyos recibidos"]].copy()
+    maximum = max(1, int(frame["Apoyos recibidos"].max()))
+    rows = []
+    for row in frame.itertuples(index=False, name=None):
+        org, establishment, typology, supports = row
+        width = max(0, min(100, int(round(int(supports) / maximum * 100))))
+        rows.append(
+            "<tr>"
+            f"<td>{html_lib.escape(str(org))}</td>"
+            f"<td>{html_lib.escape(str(establishment))}</td>"
+            f"<td>{html_lib.escape(str(typology))}</td>"
+            "<td><div class='support-meter'>"
+            f"<span style='width:{width}%'></span><b>{int(supports)}</b>"
+            "</div></td></tr>"
+        )
+    height = min(max_height, 45 * len(frame) + 48)
+    st.markdown(
+        f"""
+        <div class="support-table-wrap" style="max-height:{height}px">
+          <table class="support-table">
+            <thead><tr><th>Organización</th><th>Establecimiento</th><th>Tipología</th><th>Apoyos recibidos</th></tr></thead>
+            <tbody>{''.join(rows)}</tbody>
+          </table>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
 def add_map_marker_outline(fig: go.Figure, frame: pd.DataFrame, size_col: str) -> None:
     # px.scatter_map / go.Scattermap no admiten marker.line (el círculo de
     # MapLibre no soporta borde): se simula un contorno fino agregando una
@@ -689,6 +721,18 @@ st.markdown(f"""
   .block-container .module-head h2{{font-size:1.55rem!important}}
   .stTabs [data-baseweb="tab-list"]{{gap:1.2rem;border-bottom:1px solid {GRAY}}}
   .stTabs [aria-selected="true"]{{border-bottom:4px solid {RED}}}
+  .support-table-wrap{{overflow:auto;border:1px solid {tint(GRAY,.72)};border-radius:10px;background:white}}
+  .support-table{{width:100%;border-collapse:collapse;font-size:.88rem}}
+  .support-table th{{position:sticky;top:0;z-index:1;background:{tint(GRAY,.9)};color:{MUTED};text-align:left;padding:11px 12px;border-bottom:1px solid {tint(GRAY,.68)};font-weight:600}}
+  .support-table td{{padding:10px 12px;border-bottom:1px solid {tint(GRAY,.78)};vertical-align:middle}}
+  .support-table th:nth-child(1),.support-table td:nth-child(1){{width:16%}}
+  .support-table th:nth-child(2),.support-table td:nth-child(2){{width:34%}}
+  .support-table th:nth-child(3),.support-table td:nth-child(3){{width:28%}}
+  .support-table th:nth-child(4),.support-table td:nth-child(4){{width:22%}}
+  .support-meter{{display:grid;grid-template-columns:1fr 32px;gap:9px;align-items:center;position:relative}}
+  .support-meter::before{{content:"";grid-column:1;grid-row:1;height:10px;background:{tint(GRAY,.82)};border-radius:999px}}
+  .support-meter span{{grid-column:1;grid-row:1;height:10px;background:{RED};border-radius:999px;min-width:0}}
+  .support-meter b{{grid-column:2;font-weight:500;color:{INK};text-align:right}}
   @media print{{[data-testid="stSidebar"],header,[data-testid="stToolbar"],.stRadio,.stDownloadButton{{display:none!important}}.block-container{{max-width:none;padding:0}}.hero{{box-shadow:none}}.print-break{{break-before:page}}}}
   @media(max-width:900px){{.metric-row{{grid-template-columns:repeat(2,1fr)}}}}
 </style>
@@ -1104,11 +1148,7 @@ if module.startswith("Registro"):
         st.info("Ningún establecimiento cumple con los filtros seleccionados.")
     else:
         ranking=ranking.sort_values("apoyos",ascending=False).rename(columns={"organizacion":"Organización","lugar":"Establecimiento","tipo_punto":"Tipología","apoyos":"Apoyos recibidos"})
-        st.dataframe(
-            ranking[["Organización","Establecimiento","Tipología","Apoyos recibidos"]],
-            hide_index=True,width="stretch",height=min(700,44*len(ranking)+40),
-            column_config={"Apoyos recibidos":st.column_config.ProgressColumn("Apoyos recibidos",min_value=0,max_value=max(1,int(ranking["Apoyos recibidos"].max())),format="%d")},
-        )
+        support_ranking_table(ranking)
         n_zero=int((ranking["Apoyos recibidos"]==0).sum())
         st.caption(f"Cada fila suma las áreas y los tipos de apoyo recibidos por ese establecimiento (no montos). {n_zero} establecimiento(s) de la selección actual no registran ningún apoyo.")
 
@@ -1345,6 +1385,11 @@ if module.startswith("Registro"):
     top_munis=p.groupby("municipio").id_punto.nunique().nlargest(12).sort_values()
     top_orgs=p.groupby("organizacion").id_punto.nunique().nlargest(12).sort_values()
     top_muni_inv=ranked.head(12).sort_values()
+    top_services=fs["servicio"].value_counts().nlargest(12).sort_values()
+    top_supports=fsup["tipo_apoyo"].value_counts().nlargest(12).sort_values()
+    report_staff=pd.to_numeric(staffing[all_staff_cols].stack(),errors="coerce").unstack().sum().sort_values(ascending=False).head(12).sort_values()
+    report_staff.index=report_staff.index.str.replace("personal_","",regex=False).str.replace("_"," ").str.title()
+    top_donors=donor.groupby("donantes").id_servicio.nunique().nlargest(12).sort_values()
     report_bytes=build_report(
         title="Tablero de la Respuesta en Salud del terremoto en Venezuela",
         subtitle="Socios y apoyos del Clúster Salud — Registro de organizaciones e intervenciones",
@@ -1376,11 +1421,33 @@ if module.startswith("Registro"):
                 "caption": "El foco distingue acciones en el establecimiento de salud de acciones de salud pública.",
             },
             {
+                "title": "Servicios y tipos de apoyo registrados",
+                "rows": [[
+                    ("Áreas o servicios que reciben apoyo",bar_chart(top_services.index.tolist(),top_services.tolist(),RED,MUTED,tint(GRAY,.75),tint(GRAY,.85),height=220,width=350,label_width=145),12.7),
+                    ("Tipos de apoyo proporcionado",bar_chart(top_supports.index.tolist(),top_supports.tolist(),ORANGE,MUTED,tint(GRAY,.75),tint(GRAY,.85),height=220,width=350,label_width=145),12.7),
+                ]],
+                "caption": "Cuenta puntos registrados en F01 que declaran cada servicio o tipo de apoyo.",
+            },
+            {
+                "title": "Capacidad operativa",
+                "rows": [[
+                    ("Personal disponible por perfil",bar_chart(report_staff.index.tolist(),report_staff.tolist(),RED,MUTED,tint(GRAY,.75),tint(GRAY,.85),height=230,width=735,label_width=170),26.0),
+                ]],
+                "caption": "Suma del personal disponible reportado en los puntos incluidos por los filtros activos.",
+            },
+            {
                 "title": "Inversión registrada por municipio",
                 "rows": [[
                     ("Top municipios por inversión (USD)",bar_chart(top_muni_inv.index.tolist(),top_muni_inv.tolist(),ORANGE,MUTED,tint(GRAY,.75),tint(GRAY,.85),height=190,width=735,label_width=150),26.0),
                 ]],
                 "caption": "Montos ilustrativos del simulacro (no representan cifras reales de financiamiento).",
+            },
+            {
+                "title": "Fuentes que respaldan la oferta",
+                "rows": [[
+                    ("Puntos respaldados por fuente",bar_chart(top_donors.index.tolist(),top_donors.tolist(),TEAL,MUTED,tint(GRAY,.75),tint(GRAY,.85),height=230,width=735,label_width=180),26.0),
+                ]],
+                "caption": "Cuenta vínculos fuente–punto reportados; no representa montos ni atribuye financiamiento a un servicio específico.",
             },
         ],
         palette=report_palette,
@@ -1946,11 +2013,7 @@ elif module.startswith("Reportes"):
                 st.info("Ningún establecimiento con reporte cumple con los filtros seleccionados.")
             else:
                 ranking=ranking.sort_values("apoyos",ascending=False).rename(columns={"organizacion":"Organización","lugar":"Establecimiento","tipo_punto":"Tipología","apoyos":"Apoyos recibidos"})
-                st.dataframe(
-                    ranking[["Organización","Establecimiento","Tipología","Apoyos recibidos"]],
-                    hide_index=True,width="stretch",height=min(700,44*len(ranking)+40),
-                    column_config={"Apoyos recibidos":st.column_config.ProgressColumn("Apoyos recibidos",min_value=0,max_value=max(1,int(ranking["Apoyos recibidos"].max())),format="%d")},
-                )
+                support_ranking_table(ranking)
                 st.caption("Apoyos reales registrados en F01 (áreas y tipos de apoyo, bloques 5.1/5.2) para los establecimientos que presentaron reporte periódico (F02) dentro del alcance de los filtros activos. Dato real de registro, no simulado.")
 
         if include_population:
@@ -2018,6 +2081,12 @@ elif module.startswith("Reportes"):
     report_palette={"navy":NAVY,"muted":MUTED,"ink":INK,"blue":BLUE,"border":tint(GRAY,.75)}
     top_orgs_f02=org_points_by_focus.groupby("organizacion").puntos.sum().nlargest(12).sort_values()
     area_volume=res.groupby("area",as_index=False).total.sum().nlargest(12,"total").sort_values("total")
+    top_states_f02=r.groupby("estado").id_reporte.nunique().nlargest(12).sort_values()
+    top_munis_f02=r.groupby("municipio").id_reporte.nunique().nlargest(12).sort_values()
+    reports_by_focus=focus_summary.set_index("foco_formulario")["reportes"].sort_values()
+    totals_by_unit=res.groupby("unidad").total.sum().nlargest(12).sort_values()
+    population_totals=res[["mujeres","hombres","ninas","ninos"]].sum().rename({"mujeres":"Mujeres","hombres":"Hombres","ninas":"Niñas","ninos":"Niños"})
+    disability_by_area=res.groupby("area").discapacidad.sum().nlargest(12).sort_values()
     report_bytes=build_report(
         title="Tablero de la Respuesta en Salud del terremoto en Venezuela",
         subtitle="Reporte de acciones — Reportes periódicos (F02)",
@@ -2039,6 +2108,30 @@ elif module.startswith("Reportes"):
                     ("Top áreas por total reportado",bar_chart(area_volume.area.tolist(),area_volume.total.tolist(),ORANGE,MUTED,tint(GRAY,.75),tint(GRAY,.85),height=190,width=735,label_width=180),26.0),
                 ]],
                 "caption": "Suma de indicadores por área (personas, casos, procedimientos, kits, profesionales o instituciones); no deben sumarse entre sí como si fueran la misma unidad.",
+            },
+            {
+                "title": "Distribución territorial de los reportes",
+                "rows": [[
+                    ("Estados con más reportes",bar_chart(top_states_f02.index.tolist(),top_states_f02.tolist(),RED,MUTED,tint(GRAY,.75),tint(GRAY,.85),height=210,width=350,label_width=115),12.7),
+                    ("Municipios con más reportes",bar_chart(top_munis_f02.index.tolist(),top_munis_f02.tolist(),ORANGE,MUTED,tint(GRAY,.75),tint(GRAY,.85),height=210,width=350,label_width=125),12.7),
+                ]],
+                "caption": "Cuenta formularios F02 recibidos dentro del alcance de los filtros activos.",
+            },
+            {
+                "title": "Composición de los resultados reportados",
+                "rows": [[
+                    ("Reportes periódicos por foco",bar_chart(reports_by_focus.index.tolist(),reports_by_focus.tolist(),RED,MUTED,tint(GRAY,.75),tint(GRAY,.85),height=180,width=350,label_width=145),12.7),
+                    ("Resultados por unidad de medida",bar_chart(totals_by_unit.index.tolist(),totals_by_unit.tolist(),BLUE,MUTED,tint(GRAY,.75),tint(GRAY,.85),height=180,width=350,label_width=125),12.7),
+                ]],
+                "caption": "Las unidades se presentan separadas; no deben sumarse como si representaran una misma medida.",
+            },
+            {
+                "title": "Población reportada",
+                "rows": [[
+                    ("Composición por sexo y grupo de edad",composition_bar(population_totals.index.tolist(),population_totals.tolist(),[RED,BLUE,tint(RED,.45),SKY],MUTED,width=350,height=115),12.7),
+                    ("Personas con discapacidad por acción",bar_chart(disability_by_area.index.tolist(),disability_by_area.tolist(),TEAL,MUTED,tint(GRAY,.75),tint(GRAY,.85),height=210,width=350,label_width=145),12.7),
+                ]],
+                "caption": "Las cifras son sumas de indicadores y no representan personas únicas. La discapacidad es un subconjunto transversal.",
             },
         ],
         palette=report_palette,
