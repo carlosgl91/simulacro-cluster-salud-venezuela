@@ -1,3 +1,7 @@
 .testdeps/
 __pycache__/
 *.pyc
+# Credenciales locales (la cadena de conexión de solo lectura del tablero).
+# El repositorio es público: esto NUNCA debe versionarse. En Streamlit
+# Community Cloud el mismo contenido se carga en App settings -> Secrets.
+.streamlit/secrets.toml

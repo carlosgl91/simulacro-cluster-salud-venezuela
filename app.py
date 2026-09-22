@@ -7,10 +7,12 @@ calendario piloto son simuladas y están identificadas como tales en la interfaz
 from __future__ import annotations
 
 import base64
+import decimal
 import html as html_lib
 import io
 import json
 import math
+import os
 import re
 import sys
 import textwrap
@@ -254,18 +256,75 @@ def section_picker(label: str, options: list[str], state_key: str) -> list[str]:
     return selected
 
 
-@st.cache_data
+# Contrato de datos del tablero. Cada entrada es el mismo conjunto de columnas
+# en las dos fuentes posibles: la vista de Postgres y el CSV publicado. Las
+# vistas v_tablero_* aplican en la base la misma lista blanca que usa
+# scripts/export_datos_tablero.py para generar esos CSV, así que leer de una u
+# otra fuente da exactamente lo mismo. Ver db/schema/019_vistas_tablero.sql en
+# el repositorio del pipeline.
+FUENTES = {
+    "facilities": ("app.v_tablero_establecimientos", "establecimientos/establecimientos.csv", "id_establecimiento"),
+    "facility_areas": ("app.v_tablero_establecimientos_areas", "establecimientos/areas.csv", "id_establecimiento, area_servicio"),
+    "supports": ("app.v_tablero_establecimientos_apoyos", "establecimientos/apoyos.csv", "id_establecimiento, tipo_apoyo"),
+    "places": ("app.v_tablero_puntos_atencion", "cobertura/puntos_atencion.csv", "id_servicio"),
+    "offered": ("app.v_tablero_acciones_ofertadas", "cobertura/acciones_ofertadas.csv", "id_servicio, id"),
+    "reports": ("app.v_tablero_reportes", "acciones/reportes.csv", "id_reporte"),
+    "results": ("app.v_tablero_resultados", "acciones/resultados.csv", "id_reporte, indicador_codigo"),
+}
+
+
+def _db_url() -> str:
+    """Cadena de conexión de solo lectura, si está configurada.
+
+    Se busca primero en los secrets de Streamlit (que es como se configura en
+    Community Cloud) y después en el entorno. Si no hay ninguna, el tablero
+    lee los CSV del repositorio: así sigue funcionando para quien lo clone sin
+    credenciales, que es el modo en que se trabaja el simulacro.
+    """
+    try:
+        if "TABLERO_DB_URL" in st.secrets:
+            return str(st.secrets["TABLERO_DB_URL"]).strip()
+    except Exception:
+        pass
+    return os.environ.get("TABLERO_DB_URL", "").strip()
+
+
+def _leer_de_postgres(dsn: str) -> dict[str, pd.DataFrame]:
+    import psycopg
+
+    out: dict[str, pd.DataFrame] = {}
+    # prepare_threshold=None: el pooler de Supabase en modo transacción no
+    # admite sentencias preparadas.
+    with psycopg.connect(dsn, prepare_threshold=None) as conn, conn.cursor() as cur:
+        for clave, (vista, _csv, orden) in FUENTES.items():
+            cur.execute(f"select * from {vista} order by {orden}")
+            frame = pd.DataFrame(cur.fetchall(), columns=[d.name for d in cur.description])
+            # Dos diferencias de tipo entre leer la base y leer el CSV, que se
+            # corrigen acá para que las dos fuentes entreguen exactamente lo
+            # mismo: el contrato de los CSV codifica los booleanos como 0/1
+            # (psycopg devuelve bool), y las columnas `numeric` vuelven como
+            # Decimal (el CSV las da como float, que es lo que esperan las
+            # sumas y gráficas de más abajo).
+            for col in frame.columns:
+                if pd.api.types.is_bool_dtype(frame[col]):
+                    frame[col] = frame[col].astype(int)
+                elif frame[col].dtype == object:
+                    muestra = frame[col].dropna()
+                    if not muestra.empty and isinstance(muestra.iloc[0], decimal.Decimal):
+                        frame[col] = pd.to_numeric(frame[col], errors="coerce")
+            # "id" solo existe para poder ordenar como el CSV; no es parte del
+            # contrato de columnas.
+            out[clave] = frame.drop(columns=["id"]) if "id" in frame.columns and clave == "offered" else frame
+    return out
+
+
+@st.cache_data(ttl=600)
 def load_data() -> dict[str, pd.DataFrame]:
-    files = {
-        "facilities": DATA / "establecimientos" / "establecimientos.csv",
-        "facility_areas": DATA / "establecimientos" / "areas.csv",
-        "supports": DATA / "establecimientos" / "apoyos.csv",
-        "places": DATA / "cobertura" / "puntos_atencion.csv",
-        "offered": DATA / "cobertura" / "acciones_ofertadas.csv",
-        "reports": DATA / "acciones" / "reportes.csv",
-        "results": DATA / "acciones" / "resultados.csv",
-    }
-    out = {k: pd.read_csv(v, encoding="utf-8-sig") for k, v in files.items()}
+    dsn = _db_url()
+    if dsn:
+        out = _leer_de_postgres(dsn)
+    else:
+        out = {k: pd.read_csv(DATA / csv, encoding="utf-8-sig") for k, (_v, csv, _o) in FUENTES.items()}
     for frame in out.values():
         for col in ("organizacion", "estado", "municipio"):
             if col in frame:
