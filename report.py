@@ -11,6 +11,8 @@ import html
 from io import BytesIO
 
 import pandas as pd
+from PIL import Image as PILImage
+from PIL import ImageDraw
 from reportlab.graphics.shapes import Drawing, Rect, String
 from reportlab.lib import colors as rl_colors
 from reportlab.lib.colors import HexColor
@@ -18,6 +20,9 @@ from reportlab.lib.enums import TA_CENTER, TA_LEFT
 from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import cm
+from reportlab.platypus import (
+    Image as RLImage,
+)
 from reportlab.platypus import (
     KeepTogether,
     Paragraph,
@@ -182,6 +187,119 @@ def composition_bar(labels: list[str], values: list[float], palette: list[str], 
         drawing.add(String(legend_x + 10, legend_y - 0.5, f"{label} ({value:,.0f})", fontName="Helvetica", fontSize=6.4, fillColor=MUTED))
         legend_x += min(160, 30 + 4.3 * len(label))
     return drawing
+
+
+def _iter_rings(geometry: dict | None):
+    """Anillos exteriores de un Polygon/MultiPolygon GeoJSON (sin huecos)."""
+    if not geometry:
+        return
+    gtype = geometry.get("type")
+    if gtype == "Polygon":
+        coords = geometry.get("coordinates") or []
+        if coords:
+            yield coords[0]
+    elif gtype == "MultiPolygon":
+        for polygon in geometry.get("coordinates") or []:
+            if polygon:
+                yield polygon[0]
+
+
+def map_image(
+    features: list[dict],
+    points: list[dict],
+    *,
+    land_color: str,
+    border_color: str,
+    water_color: str = "#FFFFFF",
+    default_point_color: str = "#0067A5",
+    point_color_by: str | None = None,
+    point_colors: dict[str, str] | None = None,
+    point_radius: int = 5,
+    width_px: int = 900,
+    height_px: int = 560,
+    scale: int = 3,
+    width_cm: float = 12.0,
+    height_cm: float | None = None,
+) -> RLImage:
+    """Mapa geográfico real (PIL puro, sin geopandas/shapely) embebido como
+    imagen dentro del PDF — misma técnica que las infografías anteriores del
+    proyecto: proyección lineal lon/lat acotada al bounding box de lo que se
+    va a dibujar (no del país entero), renderizado a `scale`x y reducido al
+    final para suavizar los bordes.
+
+    features: lista de GeoJSON features ya filtrados a lo que se quiere
+        mostrar (p. ej. un subconjunto de `load_estado_geojson()["features"]`
+        por `join_key`). Solo se usa `feature["geometry"]`.
+    points: lista de dicts con al menos {"lat": float, "lon": float}; puede
+        traer una clave adicional (ver `point_color_by`) para colorear cada
+        punto según una categoría (p. ej. el foco de la intervención).
+    """
+    w, h = width_px * scale, height_px * scale
+    img = PILImage.new("RGB", (w, h), water_color)
+    draw = ImageDraw.Draw(img)
+
+    lons: list[float] = []
+    lats: list[float] = []
+    for feature in features:
+        for ring in _iter_rings(feature.get("geometry")):
+            for lon, lat in ring:
+                lons.append(lon)
+                lats.append(lat)
+    if not lons:
+        for pt in points:
+            lon, lat = pt.get("lon"), pt.get("lat")
+            if lon is not None and lat is not None:
+                lons.append(lon)
+                lats.append(lat)
+
+    height_cm = height_cm or (width_cm * height_px / width_px)
+    if not lons:
+        draw.text((20, h // 2), "Sin datos geográficos para este filtro", fill=border_color)
+        img = img.resize((width_px, height_px), PILImage.LANCZOS)
+        buf = BytesIO()
+        img.save(buf, format="PNG")
+        buf.seek(0)
+        return RLImage(buf, width=width_cm * cm, height=height_cm * cm)
+
+    min_lon, max_lon = min(lons), max(lons)
+    min_lat, max_lat = min(lats), max(lats)
+    pad_lon = (max_lon - min_lon) * 0.06 or 0.5
+    pad_lat = (max_lat - min_lat) * 0.06 or 0.5
+    min_lon, max_lon = min_lon - pad_lon, max_lon + pad_lon
+    min_lat, max_lat = min_lat - pad_lat, max_lat + pad_lat
+
+    margin = 18 * scale
+    span_lon = max(max_lon - min_lon, 1e-6)
+    span_lat = max(max_lat - min_lat, 1e-6)
+    proj_scale = min((w - 2 * margin) / span_lon, (h - 2 * margin) / span_lat)
+    off_x = margin + (w - 2 * margin - span_lon * proj_scale) / 2
+    off_y = margin + (h - 2 * margin - span_lat * proj_scale) / 2
+
+    def project(lon: float, lat: float) -> tuple[float, float]:
+        return off_x + (lon - min_lon) * proj_scale, off_y + (max_lat - lat) * proj_scale
+
+    for feature in features:
+        for ring in _iter_rings(feature.get("geometry")):
+            pixels = [project(lon, lat) for lon, lat in ring]
+            if len(pixels) >= 3:
+                draw.polygon(pixels, fill=land_color, outline=border_color, width=max(1, scale))
+
+    r = point_radius * scale
+    for pt in points:
+        lon, lat = pt.get("lon"), pt.get("lat")
+        if lon is None or lat is None or pd.isna(lon) or pd.isna(lat):
+            continue
+        x, y = project(lon, lat)
+        color = default_point_color
+        if point_color_by and point_colors:
+            color = point_colors.get(pt.get(point_color_by), default_point_color)
+        draw.ellipse([x - r, y - r, x + r, y + r], fill=color, outline="#FFFFFF", width=max(1, scale // 2))
+
+    img = img.resize((width_px, height_px), PILImage.LANCZOS)
+    buf = BytesIO()
+    img.save(buf, format="PNG")
+    buf.seek(0)
+    return RLImage(buf, width=width_cm * cm, height=height_cm * cm)
 
 
 def build_report(*, title: str, subtitle: str, scope_text: str, as_of_text: str,

@@ -29,7 +29,7 @@ _shared_packages = Path(r"C:\Users\claud\.cache\codex-runtimes\codex-primary-run
 if _shared_packages.exists():
     sys.path.append(str(_shared_packages))
 
-from report import build_report, bar_chart, composition_bar
+from report import build_report, bar_chart, composition_bar, map_image
 
 
 ROOT = Path(__file__).resolve().parent
@@ -214,6 +214,42 @@ def geojson_lat_lon_bounds(geo: dict, join_keys: set) -> tuple[float, float, flo
     if not lats:
         return None
     return min(lats), max(lats), min(lons), max(lons)
+
+
+def section_picker(label: str, options: list[str], state_key: str) -> list[str]:
+    """Selector de secciones a incluir en la descarga PDF, con "Marcar
+    todas"/"Desmarcar todas". Todas empiezan marcadas (equivalente al
+    comportamiento anterior, donde las secciones fijas siempre se incluían).
+
+    Sigue el patrón seguro de session_state para checkboxes: el valor
+    inicial se fija una sola vez con `setdefault` y nunca se pasa `value=`
+    al widget (solo `key=`) — pasar ambos a la vez dispara la advertencia
+    de Streamlit por fijar el valor del widget de dos formas distintas en
+    la misma corrida. Los botones "marcar/desmarcar todas" escriben en
+    session_state y piden un rerun inmediato para que la siguiente corrida
+    lea los checkboxes limpiamente desde ahí.
+    """
+    for option in options:
+        st.session_state.setdefault(f"{state_key}__{option}", True)
+    st.markdown(f"**{label}**")
+    mark_col, unmark_col, _ = st.columns([1, 1, 3])
+    with mark_col:
+        if st.button("Marcar todas", key=f"{state_key}__marcar"):
+            for option in options:
+                st.session_state[f"{state_key}__{option}"] = True
+            st.rerun()
+    with unmark_col:
+        if st.button("Desmarcar todas", key=f"{state_key}__desmarcar"):
+            for option in options:
+                st.session_state[f"{state_key}__{option}"] = False
+            st.rerun()
+    columns = st.columns(min(3, len(options)) or 1)
+    selected = []
+    for i, option in enumerate(options):
+        with columns[i % len(columns)]:
+            if st.checkbox(option, key=f"{state_key}__{option}"):
+                selected.append(option)
+    return selected
 
 
 @st.cache_data
@@ -1345,49 +1381,84 @@ if module.startswith("Registro"):
     top_munis=p.groupby("municipio").id_punto.nunique().nlargest(12).sort_values()
     top_orgs=p.groupby("organizacion").id_punto.nunique().nlargest(12).sort_values()
     top_muni_inv=ranked.head(12).sort_values()
-    report_bytes=build_report(
-        title="Tablero de la Respuesta en Salud del terremoto en Venezuela",
-        subtitle="Socios y apoyos del Clúster Salud — Registro de organizaciones e intervenciones",
-        scope_text="Universo vigente según los filtros de estado, municipio, organización, foco y rango de fecha activos.",
-        as_of_text=f"Generado el {pd.Timestamp.today().strftime('%d/%m/%Y')}",
-        kpis=[
-            ("Estados",num(p.estado.nunique())),
-            ("Municipios",num(p.municipio.nunique())),
-            ("Socios",num(p.organizacion.nunique())),
-            ("Puntos de intervención",num(p.id_punto.nunique())),
-            ("Profesionales",num(professional_total)),
-            ("Inversión (USD)",num(p.inversion_usd.sum())),
-        ],
-        sections=[
-            {
-                "title": "Panorama territorial",
-                "rows": [[
-                    ("Top estados por puntos de intervención",bar_chart(top_states.index.tolist(),top_states.tolist(),BLUE,MUTED,tint(GRAY,.75),tint(GRAY,.85),height=190,width=350,label_width=110),12.7),
-                    ("Top municipios por puntos de intervención",bar_chart(top_munis.index.tolist(),top_munis.tolist(),BLUE,MUTED,tint(GRAY,.75),tint(GRAY,.85),height=190,width=350,label_width=120),12.7),
-                ]],
-                "caption": "Cuenta puntos de intervención distintos (F01) dentro del alcance de los filtros activos.",
-            },
-            {
-                "title": "Socios y distribución por foco",
-                "rows": [[
-                    ("Top socios por puntos de intervención",bar_chart(top_orgs.index.tolist(),top_orgs.tolist(),NAVY,MUTED,tint(GRAY,.75),tint(GRAY,.85),height=190,width=350,label_width=140),12.7),
-                    ("Distribución por foco de intervención",composition_bar(point_distribution.foco_formulario.tolist(),point_distribution.puntos.tolist(),[RED,YELLOW],MUTED,width=350,height=115),12.7),
-                ]],
-                "caption": "El foco distingue acciones en el establecimiento de salud de acciones de salud pública.",
-            },
-            {
-                "title": "Inversión registrada por municipio",
-                "rows": [[
-                    ("Top municipios por inversión (USD)",bar_chart(top_muni_inv.index.tolist(),top_muni_inv.tolist(),ORANGE,MUTED,tint(GRAY,.75),tint(GRAY,.85),height=190,width=735,label_width=150),26.0),
-                ]],
-                "caption": "Montos ilustrativos del simulacro (no representan cifras reales de financiamiento).",
-            },
-        ],
-        palette=report_palette,
-    )
-    _, dl_col, _ = st.columns([1.0,1.15,1.0])
-    with dl_col:
-        st.download_button("Descargar infografía",data=report_bytes,file_name=f"Infografia_F01_{pd.Timestamp.today().strftime('%Y%m%d')}.pdf",mime="application/pdf",type="primary",width="stretch")
+    # Mapa: se recalcula acá (en vez de reusar el "mapped" del mapa
+    # interactivo de arriba) porque ese solo existe dentro de la rama
+    # "else" de "if mapped.empty" — recomputar es barato y evita depender
+    # de una variable que podría no estar definida según los filtros.
+    report_map_focus_colors={"Acciones en el establecimiento de salud":RED,"Acciones de salud pública":YELLOW}
+    report_map_points_f01=p.dropna(subset=["latitud","longitud"]).assign(foco_formulario=lambda d: d.foco.map({"Establecimiento de salud":"Acciones en el establecimiento de salud","Salud pública":"Acciones de salud pública"}))
+    map_records_f01=report_map_points_f01.rename(columns={"latitud":"lat","longitud":"lon"})[["lat","lon","foco_formulario"]].to_dict("records")
+    # Capacidad operativa: mismo cómputo que la gráfica de "Personal
+    # disponible por perfil" de más arriba, pero sobre "staffing" completo
+    # (los filtros globales), no sobre el filtro local de socio/punto de
+    # esa sección — el PDF debe reflejar el alcance de los filtros de la
+    # barra lateral, no un widget de exploración aparte.
+    staff_totals_f01=pd.to_numeric(staffing[all_staff_cols].stack(),errors="coerce").unstack().sum().sort_values(ascending=False).head(12).sort_values()
+    staff_labels_f01=[c.replace("personal_","").replace("_"," ").title() for c in staff_totals_f01.index]
+    staff_labels_f01=[{"Medico":"Médicos(as)","Enfermero":"Enfermeros(as)","Administrativos":"Administrativos(as)","Psicologo":"Psicólogos(as)","Pediatria":"Pediatría","Ginecologia":"Ginecología","Odontologos":"Odontólogos(as)","Psiquiatra":"Psiquiatras"}.get(l,l) for l in staff_labels_f01]
+    available_sections_f01={
+        "Panorama territorial": {
+            "title": "Panorama territorial",
+            "rows": [[
+                ("Top estados por puntos de intervención",bar_chart(top_states.index.tolist(),top_states.tolist(),BLUE,MUTED,tint(GRAY,.75),tint(GRAY,.85),height=190,width=350,label_width=110),12.7),
+                ("Top municipios por puntos de intervención",bar_chart(top_munis.index.tolist(),top_munis.tolist(),BLUE,MUTED,tint(GRAY,.75),tint(GRAY,.85),height=190,width=350,label_width=120),12.7),
+            ]],
+            "caption": "Cuenta puntos de intervención distintos (F01) dentro del alcance de los filtros activos.",
+        },
+        "Mapa de intervenciones registradas": {
+            "title": "Mapa de intervenciones registradas",
+            "rows": [[
+                ("Ubicación de los puntos de intervención",map_image(load_estado_geojson()["features"],map_records_f01,land_color=tint(GRAY,.88),border_color=tint(GRAY,.55),point_color_by="foco_formulario",point_colors=report_map_focus_colors,default_point_color=BLUE,width_px=1000,height_px=500,width_cm=25.0,height_cm=12.5),26.0),
+            ]],
+            "caption": "Mapa ilustrativo de los puntos con coordenadas válidas dentro del alcance de los filtros activos; límites administrativos con fines cartográficos.",
+        } if not report_map_points_f01.empty else None,
+        "Socios y distribución por foco": {
+            "title": "Socios y distribución por foco",
+            "rows": [[
+                ("Top socios por puntos de intervención",bar_chart(top_orgs.index.tolist(),top_orgs.tolist(),NAVY,MUTED,tint(GRAY,.75),tint(GRAY,.85),height=190,width=350,label_width=140),12.7),
+                ("Distribución por foco de intervención",composition_bar(point_distribution.foco_formulario.tolist(),point_distribution.puntos.tolist(),[RED,YELLOW],MUTED,width=350,height=115),12.7),
+            ]],
+            "caption": "El foco distingue acciones en el establecimiento de salud de acciones de salud pública.",
+        },
+        "Capacidad operativa (personal reportado)": {
+            "title": "Capacidad operativa (personal reportado)",
+            "rows": [[
+                ("Top perfiles profesionales por personal disponible",bar_chart(staff_labels_f01,staff_totals_f01.tolist(),NAVY,MUTED,tint(GRAY,.75),tint(GRAY,.85),height=190,width=735,label_width=150),26.0),
+            ]],
+            "caption": "Suma del personal disponible reportado por perfil profesional (bloque de cobertura del F01), dentro del alcance de los filtros activos.",
+        } if not staff_totals_f01.empty and staff_totals_f01.sum()>0 else None,
+        "Inversión registrada por municipio": {
+            "title": "Inversión registrada por municipio",
+            "rows": [[
+                ("Top municipios por inversión (USD)",bar_chart(top_muni_inv.index.tolist(),top_muni_inv.tolist(),ORANGE,MUTED,tint(GRAY,.75),tint(GRAY,.85),height=190,width=735,label_width=150),26.0),
+            ]],
+            "caption": "Montos ilustrativos del simulacro (no representan cifras reales de financiamiento).",
+        } if not ranked.empty else None,
+    }
+    available_sections_f01={k:v for k,v in available_sections_f01.items() if v is not None}
+    selected_f01=section_picker("Elegí qué secciones incluir en el PDF",list(available_sections_f01.keys()),"f01_report_sections")
+    if not selected_f01:
+        st.info("Elegí al menos una sección para generar el PDF.")
+    else:
+        report_bytes=build_report(
+            title="Tablero de la Respuesta en Salud del terremoto en Venezuela",
+            subtitle="Socios y apoyos del Clúster Salud — Registro de organizaciones e intervenciones",
+            scope_text="Universo vigente según los filtros de estado, municipio, organización, foco y rango de fecha activos.",
+            as_of_text=f"Generado el {pd.Timestamp.today().strftime('%d/%m/%Y')}",
+            kpis=[
+                ("Estados",num(p.estado.nunique())),
+                ("Municipios",num(p.municipio.nunique())),
+                ("Socios",num(p.organizacion.nunique())),
+                ("Puntos de intervención",num(p.id_punto.nunique())),
+                ("Profesionales",num(professional_total)),
+                ("Inversión (USD)",num(p.inversion_usd.sum())),
+            ],
+            sections=[available_sections_f01[t] for t in available_sections_f01 if t in selected_f01],
+            palette=report_palette,
+        )
+        _, dl_col, _ = st.columns([1.0,1.15,1.0])
+        with dl_col:
+            st.download_button("Descargar infografía",data=report_bytes,file_name=f"Infografia_F01_{pd.Timestamp.today().strftime('%Y%m%d')}.pdf",mime="application/pdf",type="primary",width="stretch")
 elif module.startswith("Reportes"):
     section_figures: dict[str, list[go.Figure]] = {}
     r=filt(reports,True); ids=set(r.id_reporte); res=results[results.id_reporte.isin(ids)].copy(); active=r.sort_values("fecha_reporte").drop_duplicates(["organizacion","nombre_sitio"],keep="last")
@@ -2018,34 +2089,53 @@ elif module.startswith("Reportes"):
     report_palette={"navy":NAVY,"muted":MUTED,"ink":INK,"blue":BLUE,"border":tint(GRAY,.75)}
     top_orgs_f02=org_points_by_focus.groupby("organizacion").puntos.sum().nlargest(12).sort_values()
     area_volume=res.groupby("area",as_index=False).total.sum().nlargest(12,"total").sort_values("total")
-    report_bytes=build_report(
-        title="Tablero de la Respuesta en Salud del terremoto en Venezuela",
-        subtitle="Reporte de acciones — Reportes periódicos (F02)",
-        scope_text="Universo de reportes vigente según los filtros de estado, municipio, organización, foco y rango de fecha activos.",
-        as_of_text=f"Generado el {pd.Timestamp.today().strftime('%d/%m/%Y')}",
-        kpis=[(c[0],c[1]) for c in cards],
-        sections=[
-            {
-                "title": "Organizaciones y distribución por foco",
-                "rows": [[
-                    ("Top organizaciones por puntos con reporte",bar_chart(top_orgs_f02.index.tolist(),top_orgs_f02.tolist(),NAVY,MUTED,tint(GRAY,.75),tint(GRAY,.85),height=190,width=350,label_width=140),12.7),
-                    ("Distribución por foco de intervención",composition_bar(focus_points.foco_formulario.tolist(),focus_points.puntos.tolist(),[RED,YELLOW],MUTED,width=350,height=115),12.7),
-                ]],
-                "caption": "Cuenta puntos distintos (no reportes); una organización con varios puntos aparece una sola vez.",
-            },
-            {
-                "title": "Volumen reportado por área temática",
-                "rows": [[
-                    ("Top áreas por total reportado",bar_chart(area_volume.area.tolist(),area_volume.total.tolist(),ORANGE,MUTED,tint(GRAY,.75),tint(GRAY,.85),height=190,width=735,label_width=180),26.0),
-                ]],
-                "caption": "Suma de indicadores por área (personas, casos, procedimientos, kits, profesionales o instituciones); no deben sumarse entre sí como si fueran la misma unidad.",
-            },
-        ],
-        palette=report_palette,
-    )
-    _, dl_col, _ = st.columns([1.0,1.15,1.0])
-    with dl_col:
-        st.download_button("Descargar infografía",data=report_bytes,file_name=f"Infografia_F02_{pd.Timestamp.today().strftime('%Y%m%d')}.pdf",mime="application/pdf",type="primary",width="stretch")
+    # Mismo criterio que en F01: se recalcula el universo de puntos para el
+    # mapa a partir de "active" (no del "mapped" del mapa interactivo de
+    # arriba, que solo existe dentro de su propia rama condicional).
+    report_map_focus_colors_f02={"Acciones en el establecimiento de salud":RED,"Acciones de salud pública":YELLOW}
+    report_map_points_f02=active.dropna(subset=["latitud","longitud"]).assign(foco_formulario=lambda d: d.foco.map({"Establecimiento de salud":"Acciones en el establecimiento de salud","Salud pública":"Acciones de salud pública"}))
+    map_records_f02=report_map_points_f02.rename(columns={"latitud":"lat","longitud":"lon"})[["lat","lon","foco_formulario"]].to_dict("records")
+    available_sections_f02={
+        "Organizaciones y distribución por foco": {
+            "title": "Organizaciones y distribución por foco",
+            "rows": [[
+                ("Top organizaciones por puntos con reporte",bar_chart(top_orgs_f02.index.tolist(),top_orgs_f02.tolist(),NAVY,MUTED,tint(GRAY,.75),tint(GRAY,.85),height=190,width=350,label_width=140),12.7),
+                ("Distribución por foco de intervención",composition_bar(focus_points.foco_formulario.tolist(),focus_points.puntos.tolist(),[RED,YELLOW],MUTED,width=350,height=115),12.7),
+            ]],
+            "caption": "Cuenta puntos distintos (no reportes); una organización con varios puntos aparece una sola vez.",
+        },
+        "Mapa de puntos con reporte periódico": {
+            "title": "Mapa de puntos con reporte periódico",
+            "rows": [[
+                ("Ubicación de los puntos con reporte",map_image(load_estado_geojson()["features"],map_records_f02,land_color=tint(GRAY,.88),border_color=tint(GRAY,.55),point_color_by="foco_formulario",point_colors=report_map_focus_colors_f02,default_point_color=BLUE,width_px=1000,height_px=500,width_cm=25.0,height_cm=12.5),26.0),
+            ]],
+            "caption": "Mapa ilustrativo de los puntos con coordenadas válidas y reporte periódico vigente; límites administrativos con fines cartográficos.",
+        } if not report_map_points_f02.empty else None,
+        "Volumen reportado por área temática": {
+            "title": "Volumen reportado por área temática",
+            "rows": [[
+                ("Top áreas por total reportado",bar_chart(area_volume.area.tolist(),area_volume.total.tolist(),ORANGE,MUTED,tint(GRAY,.75),tint(GRAY,.85),height=190,width=735,label_width=180),26.0),
+            ]],
+            "caption": "Suma de indicadores por área (personas, casos, procedimientos, kits, profesionales o instituciones); no deben sumarse entre sí como si fueran la misma unidad.",
+        },
+    }
+    available_sections_f02={k:v for k,v in available_sections_f02.items() if v is not None}
+    selected_f02=section_picker("Elegí qué secciones incluir en el PDF",list(available_sections_f02.keys()),"f02_report_sections")
+    if not selected_f02:
+        st.info("Elegí al menos una sección para generar el PDF.")
+    else:
+        report_bytes=build_report(
+            title="Tablero de la Respuesta en Salud del terremoto en Venezuela",
+            subtitle="Reporte de acciones — Reportes periódicos (F02)",
+            scope_text="Universo de reportes vigente según los filtros de estado, municipio, organización, foco y rango de fecha activos.",
+            as_of_text=f"Generado el {pd.Timestamp.today().strftime('%d/%m/%Y')}",
+            kpis=[(c[0],c[1]) for c in cards],
+            sections=[available_sections_f02[t] for t in available_sections_f02 if t in selected_f02],
+            palette=report_palette,
+        )
+        _, dl_col, _ = st.columns([1.0,1.15,1.0])
+        with dl_col:
+            st.download_button("Descargar infografía",data=report_bytes,file_name=f"Infografia_F02_{pd.Timestamp.today().strftime('%Y%m%d')}.pdf",mime="application/pdf",type="primary",width="stretch")
 else:
     section_figures: dict[str, list[go.Figure]] = {}
     section_band("CALENDARIO DE BRIGADAS", "Aquí se registran y planifican todas las acciones de salud pública.")
