@@ -789,7 +789,7 @@ date_floor, date_ceiling = (
 hero_today_label = pd.Timestamp.today().strftime("%d/%m/%Y")
 st.markdown(f'<div class="hero"><b>OPS/OMS · CLÚSTER DE SALUD · VENEZUELA</b><h1>Tablero de la Respuesta en Salud del terremoto en Venezuela (M7.2 y M7.5)</h1><p>Presencia operativa, programación de actividades y resultados reportados</p><small>Fecha de consulta: {hero_today_label} · Periodo de reportes: {date_floor.strftime("%d/%m/%Y")} – {date_ceiling.strftime("%d/%m/%Y")}</small></div>', unsafe_allow_html=True)
 
-RADIO_MODULE_OPTIONS=["Mapeo de socios, servicios y apoyos", "Reportes periódicos de acciones"]
+RADIO_MODULE_OPTIONS=["Mapeo de socios, servicios y apoyos (F01)", "Reportes periódicos de acciones (F02)"]
 CALENDAR_MODULE="Calendario de brigadas"
 if "active_module" not in st.session_state:
     st.session_state.active_module = RADIO_MODULE_OPTIONS[1] if st.query_params.get("vista")=="reportes" else RADIO_MODULE_OPTIONS[0]
