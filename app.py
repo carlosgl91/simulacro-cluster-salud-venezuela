@@ -1440,11 +1440,12 @@ if module.startswith("Registro"):
     if not selected_f01:
         st.info("Elegí al menos una sección para generar el PDF.")
     else:
+        period_text_f01=f"del {date_start.strftime('%d/%m/%Y')} al {date_end.strftime('%d/%m/%Y')}"
         report_bytes=build_report(
             title="Tablero de la Respuesta en Salud del terremoto en Venezuela",
             subtitle="Socios y apoyos del Clúster Salud — Registro de organizaciones e intervenciones",
-            scope_text="Universo vigente según los filtros de estado, municipio, organización, foco y rango de fecha activos.",
-            as_of_text=f"Generado el {pd.Timestamp.today().strftime('%d/%m/%Y')}",
+            scope_text=f"Universo vigente según los filtros de estado, municipio, organización y foco activos, para el período {period_text_f01}.",
+            as_of_text=f"Generado el {pd.Timestamp.today().strftime('%d/%m/%Y')} · Corte {period_text_f01}",
             kpis=[
                 ("Estados",num(p.estado.nunique())),
                 ("Municipios",num(p.municipio.nunique())),
@@ -2124,11 +2125,12 @@ elif module.startswith("Reportes"):
     if not selected_f02:
         st.info("Elegí al menos una sección para generar el PDF.")
     else:
+        period_text_f02=f"del {date_start.strftime('%d/%m/%Y')} al {date_end.strftime('%d/%m/%Y')}"
         report_bytes=build_report(
             title="Tablero de la Respuesta en Salud del terremoto en Venezuela",
             subtitle="Reporte de acciones — Reportes periódicos (F02)",
-            scope_text="Universo de reportes vigente según los filtros de estado, municipio, organización, foco y rango de fecha activos.",
-            as_of_text=f"Generado el {pd.Timestamp.today().strftime('%d/%m/%Y')}",
+            scope_text=f"Universo de reportes vigente según los filtros de estado, municipio, organización y foco activos, para el período {period_text_f02}.",
+            as_of_text=f"Generado el {pd.Timestamp.today().strftime('%d/%m/%Y')} · Corte {period_text_f02}",
             kpis=[(c[0],c[1]) for c in cards],
             sections=[available_sections_f02[t] for t in available_sections_f02 if t in selected_f02],
             palette=report_palette,
