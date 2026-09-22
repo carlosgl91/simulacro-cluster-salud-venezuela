@@ -1,0 +1,9 @@
+.git
+.github
+__pycache__
+*.pyc
+.testdeps
+.devcontainer
+# Credenciales locales: nunca deben entrar a la imagen. En el contenedor la
+# conexión llega por la variable de entorno TABLERO_DB_URL.
+.streamlit/secrets.toml
