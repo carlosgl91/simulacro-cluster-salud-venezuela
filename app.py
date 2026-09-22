@@ -789,7 +789,7 @@ date_floor, date_ceiling = (
 hero_today_label = pd.Timestamp.today().strftime("%d/%m/%Y")
 st.markdown(f'<div class="hero"><b>OPS/OMS · CLÚSTER DE SALUD · VENEZUELA</b><h1>Tablero de la Respuesta en Salud del terremoto en Venezuela (M7.2 y M7.5)</h1><p>Presencia operativa, programación de actividades y resultados reportados</p><small>Fecha de consulta: {hero_today_label} · Periodo de reportes: {date_floor.strftime("%d/%m/%Y")} – {date_ceiling.strftime("%d/%m/%Y")}</small></div>', unsafe_allow_html=True)
 
-RADIO_MODULE_OPTIONS=["Registro de organizaciones e intervenciones", "Reportes periódicos"]
+RADIO_MODULE_OPTIONS=["Mapeo de socios, servicios y apoyos", "Reportes periódicos"]
 CALENDAR_MODULE="Calendario de brigadas"
 if "active_module" not in st.session_state:
     st.session_state.active_module = RADIO_MODULE_OPTIONS[1] if st.query_params.get("vista")=="reportes" else RADIO_MODULE_OPTIONS[0]
@@ -1432,7 +1432,7 @@ if module.startswith("Registro"):
     top_donors=donor.groupby("donantes").id_servicio.nunique().nlargest(12).sort_values()
     report_bytes=build_report(
         title="Tablero de la Respuesta en Salud del terremoto en Venezuela",
-        subtitle="Socios y apoyos del Clúster Salud — Registro de organizaciones e intervenciones",
+        subtitle="Socios y apoyos del Clúster Salud — Mapeo de socios, servicios y apoyos",
         scope_text="Universo vigente según los filtros de estado, municipio, organización, foco y rango de fecha activos.",
         as_of_text=f"Generado el {pd.Timestamp.today().strftime('%d/%m/%Y')}",
         kpis=[
